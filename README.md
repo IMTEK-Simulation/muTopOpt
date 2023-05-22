@@ -1,6 +1,6 @@
-# Skeleton
+# muTopOpt
 
-Skeleton for numerical projects with Python. This skeleton uses [numpy](https://numpy.org/) and [pytest](https://pytest.org). Rename the `python_skeleton` subdirectory to your module name.
+Repository for topology optimization with muSpectre. It uses [muSpectre](https://gitlab.com/muspectre/muspectre), [numpy](https://numpy.org/), [scipy](https://docs.scipy.org/doc/), [NuMPI](https://github.com/IMTEK-Simulation/NuMPI) and [pytest](https://pytest.org).
 
 ## Tests
 
