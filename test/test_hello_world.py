@@ -26,7 +26,7 @@
 Tests the hello world function
 """
 
-from python_skeleton import hello_world
+from muTopOpt import hello_world
 
 
 def test_hello_world():
