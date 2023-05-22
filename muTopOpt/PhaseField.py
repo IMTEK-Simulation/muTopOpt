@@ -62,9 +62,9 @@ def phase_field_rectangular_grid(phase, eta, cell):
 
     return phase_field
 
-def phase_field_rectangular_grid_derivative(phase, eta, cell):
-    """ Function to calculate the derivative of the energy of the phase-field on a 2D grid.
-        As discretization rectangles are used.
+def phase_field_rectangular_grid_deriv_phase(phase, eta, cell):
+    """ Function to calculate the partial derivative of the energy of the phase-field with respect to the phase.
+        As discretization 2D-rectangles are used.
 
     Parameters
     ----------

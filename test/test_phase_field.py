@@ -23,18 +23,18 @@
 #
 
 """
-Tests the hello world function
+Tests the phase field functions
 """
 import numpy as np
 import muSpectre as µ
 
-from muTopOpt.PhaseField import phase_field_rectangular_grid_derivative
+from muTopOpt.PhaseField import phase_field_rectangular_grid_deriv_phase
 from muTopOpt.PhaseField import phase_field_rectangular_grid
 
 
-def test_phase_field_rectangular_grid_derivative(plot=False):
+def test_phase_field_rectangular_grid_deriv_phase(plot=False):
     """ Check the implementation of the derivative of the phase field
-        term on a rectangular grid.
+        term with respect to the phase on a rectangular grid.
     """
     # Set up
     nb_grid_pts = [5, 7]
@@ -53,7 +53,7 @@ def test_phase_field_rectangular_grid_derivative(plot=False):
 
     # Calculate derivative
     ph_field = phase_field_rectangular_grid(phase, eta, cell)
-    deriv = phase_field_rectangular_grid_derivative(phase, eta, cell)
+    deriv = phase_field_rectangular_grid_deriv_phase(phase, eta, cell)
 
     # Finite difference calculation of the derivative
     diff_list = []
