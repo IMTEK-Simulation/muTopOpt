@@ -20,7 +20,8 @@ def phase_field_rectangular_grid(phase, eta, cell):
     cell: object
           muSpectre cell object
 
-    Returns:
+    Returns
+    -------
     phase_field: float
                  Energy of the phase field
     """
@@ -75,7 +76,8 @@ def phase_field_rectangular_grid_deriv_phase(phase, eta, cell):
     cell: object
           muSpectre cell object
 
-    Returns:
+    Returns
+    -------
     derivative: np.ndarray(nb_pixels) of floats
                 Derivative of phase_field_rectangular_grid with respect to the phase field function at each grid point.
                 The iteration order of the pixels is column-major.
