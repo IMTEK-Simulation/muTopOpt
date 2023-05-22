@@ -1,6 +1,11 @@
 """
 This file contains the phase-field aim function and gradients.
 """
+import numpy as np
+import muSpectre as µ
+
+from NuMPI import MPI
+from NuMPI.Tools import Reduction
 
 def phase_field_rectangular_grid(phase, eta, cell):
     """ Function to calculate the energy of the phase-field on a 2D grid.
