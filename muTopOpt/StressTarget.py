@@ -29,7 +29,7 @@ def square_error_target_stresses(cell, strains, stresses, target_stresses):
     dim = cell.dim
     shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
 
-    # Assert that stresses and stress_aim_list have the same length
+    # Assert that stresses and target_stresses have the same length
     if len(stresses) is not len(target_stresses):
         exit('stresses and target_stresses must have the same length.')
 
@@ -73,7 +73,7 @@ def square_error_target_stresses_deriv_strains(cell, strains, stresses, target_s
     nb_pixels = np.prod(nb_grid_pts)
     shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
 
-    # Assert that stresses and stress_aim_list have the same length
+    # Assert that strains and target_stresses have the same length
     if len(strains) is not len(target_stresses):
         exit('strains and target_stresses must have the same length.')
 
@@ -120,7 +120,7 @@ def square_error_target_stresses_deriv_phase(cell, stresses, target_stresses, ds
     nb_pixels = np.prod(nb_grid_pts)
     shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
 
-    # Assert that stresses and stress_aim_list have the same length
+    # Assert that stresses and target_stresses have the same length
     if len(stresses) is not len(target_stresses):
         exit('stresses and target_stresses must have the same length.')
 
@@ -136,7 +136,7 @@ def square_error_target_stresses_deriv_phase(cell, stresses, target_stresses, ds
         dstress_dphase = np.average(dstress_dphase_list[i], axis=2)
         for j in range(dim):
             for k in range(dim):
-                derivative += 2 * (stress_average[j, k] - stress_aim[j, k]) *\
+                derivative += 2 * (stress_average[j, k] - target_stress[j, k]) *\
                               dstress_dphase[j, k] / nb_pixels
 
     derivative = derivative.flatten(order='F')

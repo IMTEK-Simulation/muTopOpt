@@ -3,6 +3,7 @@ Tests the StressTarget functions
 """
 import numpy as np
 import muSpectre as µ
+from muSpectre import sensitivity_analysis as sa
 
 from muTopOpt.StressTarget import square_error_target_stresses
 from muTopOpt.StressTarget import square_error_target_stresses_deriv_strains
@@ -276,3 +277,126 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
         plt.show()
 
     assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+
+
+def test_square_error_target_stresses_deriv_phase(plot=True):
+    """ Check the implementation of the derivative of the target stresses
+        term with respect to the strains on a rectangular grid for one load case.
+    """
+
+    ### ----- Set-up ----- ###
+    # Discretization
+    nb_grid_pts = [5, 7]
+    dim = len(nb_grid_pts)
+    lengths = [2.5, 3.1]
+    formulation = µ.Formulation.small_strain
+    cell = µ.Cell(nb_grid_pts, lengths, formulation)
+
+    # Material
+    phase = np.random.random(nb_grid_pts).flatten(order='F')
+    delta_Young = 10.
+    delta_Poisson = 0.3
+
+    # Load cases
+    DelFs = [np.zeros([dim, dim])]
+    DelFs[0][0, 0] = 0.01
+
+    # muSpectre solver parameters
+    tol = 1e-6
+    maxiter = 100
+    verbose = µ.Verbosity.Silent
+
+    # List of finite differences
+    if plot:
+        delta_list = [1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7]
+    else:
+        delta_list = [1e-4, 5e-5]
+
+    ### ----- Target stresses ----- ###
+    # Stresses for homogenous material with half the Youngs modulus
+    mu = 0.5 * 0.5 * delta_Young / (1 + delta_Poisson)
+    lam = delta_Poisson / (1 - 2 * delta_Poisson) * 0.5 * delta_Young / (1 + delta_Poisson)
+    target_stresses = []
+    for DelF in DelFs:
+        stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        target_stresses.append(stress)
+
+    ### ----- Analytical derivative ----- ###
+    # Material initialization
+    Young = delta_Young * phase
+    Poisson = delta_Poisson * phase
+    mat = µ.material.MaterialLinearElastic4_2d.make(cell, "material")
+    for pixel_id in cell.pixel_indices:
+            mat.add_pixel(pixel_id, Young[pixel_id], Poisson[pixel_id])
+
+    # muSpectre calculation
+    solver=µ.solvers.KrylovSolverCG(cell, tol, maxiter, verbose)
+    stresses = []
+    strains = []
+    helper_stresses = []
+    for DelF in DelFs:
+        r = µ.solvers.newton_cg(cell, DelF, solver, tol, tol, verbose)
+        stress = r.stress.copy()
+        stresses.append(stress)
+        strain = r.grad.copy()
+        strains.append(strain)
+
+    dstress_dphase_list = sa.calculate_dstress_dphase(cell, strains, Young,
+                                                      delta_Young, Poisson,
+                                                      delta_Poisson)
+
+    # Function and derivative
+    sq_err = square_error_target_stresses(cell, strains, stresses, target_stresses)
+    deriv = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses, dstress_dphase_list)
+
+    ### ----- Finite difference derivatives ----- ###
+    shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
+    diff_list = []
+    for delta in delta_list:
+        deriv_fin_diff = np.empty(deriv.shape)
+        for i in range(len(deriv)):
+            # Cell with disturbed material
+            phase[i] += delta
+            Young = delta_Young * phase
+            Poisson = delta_Poisson * phase
+            for pixel_id, pixel in cell.pixels.enumerate():
+                quad_id = cell.nb_quad_pts * pixel_id
+                for i_quad in range(cell.nb_quad_pts):
+                    mat.set_youngs_modulus_and_poisson_ratio(quad_id + i_quad,
+                                                             Young[pixel_id],
+                                                             Poisson[pixel_id])
+            # New stresses
+            stresses = []
+            for strain in strains:
+                stress = cell.evaluate_stress(strain.reshape(shape, order='F'))
+                stresses.append(stress.copy())
+
+            # Derivative of square_error_target_stresses()
+            sq_err_plus = square_error_target_stresses(cell, strains, stresses, target_stresses)
+            deriv_fin_diff[i] = (sq_err_plus - sq_err) / delta
+            phase[i] -= delta
+
+        diff = np.linalg.norm(deriv_fin_diff - deriv)
+        diff_list.append(diff)
+
+    ### ----- Exponential fit ----- ###
+    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+
+    ### ----- Plotting (optional) ----- ###
+    if plot:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.set_xlabel('Fin. diff.')
+        ax.set_ylabel('Norm of difference of square error derivative with respect to phase')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.plot(delta_list, diff_list, marker='o', label='Calculated')
+        delta_list = np.array(delta_list)
+        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.legend()
+        plt.show()
+
+    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+
+
+
