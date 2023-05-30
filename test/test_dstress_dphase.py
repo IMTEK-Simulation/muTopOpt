@@ -7,7 +7,10 @@ import muFFT
 #from muTopOpt import sensitivity_analysis as sa
 from muSpectre import sensitivity_analysis as sa
 
-def test_dstress_dphase(plot=False):
+# Comment: Is also tested in muSpectre
+# but here more variants are tested
+
+def test_dstress_dphase(plot=True):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -22,10 +25,6 @@ def test_dstress_dphase(plot=False):
     delta_Poisson = 0.3
 
     # Load cases
-    #DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    #DelFs[0][0, 0] = 0.01
-    #DelFs[1][0, 1] = 0.007 / 2
-    #DelFs[1][1, 0] = 0.007 / 2
     DelFs = [np.zeros([dim, dim])]
     DelFs[0][0, 0] = 0.01
 
@@ -76,7 +75,6 @@ def test_dstress_dphase(plot=False):
             stress = stresses[i_case].reshape(deriv.shape, order='F')
             deriv_fin_diff = np.empty(deriv.shape)
 
-            #for i in range(len(phase)):
             for pixel_id in cell.pixel_indices:
                 # New material
                 helper_cell = µ.Cell(nb_grid_pts, lengths, formulation)
@@ -97,27 +95,28 @@ def test_dstress_dphase(plot=False):
         diff = np.sqrt(diff)
         diff_list.append(diff)
 
-    ### ----- Exponential fit ----- ###
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     ### ----- Plotting (optional) ----- ###
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of square error derivative with respect to strains')
+        ax.set_ylabel('Abs error of stress deriv density')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='o', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
 
-def test_dstress_dphase_void(plot=False):
+def test_dstress_dphase_void(plot=True):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -133,10 +132,6 @@ def test_dstress_dphase_void(plot=False):
     phase[0] = 0
 
     # Load cases
-    #DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    #DelFs[0][0, 0] = 0.01
-    #DelFs[1][0, 1] = 0.007 / 2
-    #DelFs[1][1, 0] = 0.007 / 2
     DelFs = [np.zeros([dim, dim])]
     DelFs[0][0, 0] = 0.01
 
@@ -148,7 +143,6 @@ def test_dstress_dphase_void(plot=False):
     # List of finite differences
     if plot:
         delta_list = [1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7]
-        # delta_list = [1e-5]
     else:
         delta_list = [1e-4, 5e-5]
 
@@ -188,7 +182,6 @@ def test_dstress_dphase_void(plot=False):
             stress = stresses[i_case].reshape(deriv.shape, order='F')
             deriv_fin_diff = np.empty(deriv.shape)
 
-            #for i in range(len(phase)):
             for pixel_id in cell.pixel_indices:
                 # New material
                 helper_cell = µ.Cell(nb_grid_pts, lengths, formulation)
@@ -209,26 +202,27 @@ def test_dstress_dphase_void(plot=False):
         diff = np.sqrt(diff)
         diff_list.append(diff)
 
-    ### ----- Exponential fit ----- ###
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     ### ----- Plotting (optional) ----- ###
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of square error derivative with respect to strains')
+        ax.set_ylabel('Abs error of stress deriv density (with void)')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='o', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
-def test_dstress_dphase_two_strains(plot=False):
+def test_dstress_dphase_two_strains(plot=True):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -257,7 +251,6 @@ def test_dstress_dphase_two_strains(plot=False):
     # List of finite differences
     if plot:
         delta_list = [1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7]
-        # delta_list = [1e-5]
     else:
         delta_list = [1e-4, 5e-5]
 
@@ -297,7 +290,6 @@ def test_dstress_dphase_two_strains(plot=False):
             stress = stresses[i_case].reshape(deriv.shape, order='F')
             deriv_fin_diff = np.empty(deriv.shape)
 
-            #for i in range(len(phase)):
             for pixel_id in cell.pixel_indices:
                 # New material
                 helper_cell = µ.Cell(nb_grid_pts, lengths, formulation)
@@ -318,26 +310,27 @@ def test_dstress_dphase_two_strains(plot=False):
         diff = np.sqrt(diff)
         diff_list.append(diff)
 
-    ### ----- Exponential fit ----- ###
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     ### ----- Plotting (optional) ----- ###
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of square error derivative with respect to strains')
+        ax.set_ylabel('Abs error of stress deriv density (two strains)')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='o', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
-def test_dstress_dphase_2_quad_pts(plot=False):
+def test_dstress_dphase_2_quad_pts(plot=True):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -409,7 +402,6 @@ def test_dstress_dphase_2_quad_pts(plot=False):
             stress = stresses[i_case].reshape(deriv.shape, order='F')
             deriv_fin_diff = np.empty(deriv.shape)
 
-            #for i in range(len(phase)):
             for pixel_id in cell.pixel_indices:
                 # New material
                 helper_cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights=weights)
@@ -430,23 +422,24 @@ def test_dstress_dphase_2_quad_pts(plot=False):
         diff = np.sqrt(diff)
         diff_list.append(diff)
 
-    ### ----- Exponential fit ----- ###
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     ### ----- Plotting (optional) ----- ###
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of square error derivative with respect to strains')
+        ax.set_ylabel('Abs error of stress deriv density (two quad pts)')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='o', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
 

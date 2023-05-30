@@ -63,11 +63,11 @@ def test_square_error_target_stresses():
     ### ----- Test square_error_target_stresses() ----- ###
     sq_error = square_error_target_stresses(cell, strains, stresses, ana_stresses)
 
-    assert True
+    assert abs(sq_error) < 1e-7
 
-def test_square_error_target_stresses_deriv_strain(plot=False):
+def test_square_error_target_stresses_deriv_strain(plot=True):
     """ Check the implementation of the derivative of the target stresses
-        term with respect to the strains on a rectangular grid for one load case.
+        term with respect to the strains for one load case.
     """
 
     ### ----- Set-up ----- ###
@@ -79,8 +79,9 @@ def test_square_error_target_stresses_deriv_strain(plot=False):
     cell = µ.Cell(nb_grid_pts, lengths, formulation)
 
     # Material
+    np.random.seed(1)
     phase = np.random.random(nb_grid_pts).flatten(order='F')
-    Young = 10.
+    Young = 12.
     Poisson = 0.3
 
     # Load cases
@@ -100,8 +101,10 @@ def test_square_error_target_stresses_deriv_strain(plot=False):
 
     ### ----- Target stresses ----- ###
     # Stresses for homogenous material with half the Youngs modulus
-    mu = 0.5 * 0.5 * Young / (1 + Poisson)
-    lam = Poisson / (1 - 2 * Poisson) * 0.5 * Young / (1 + Poisson)
+    Young_av = Young / 2
+    Poisson_av = Poisson / 2
+    mu = 0.5 * Young_av / (1 + Poisson_av)
+    lam = Poisson_av / (1 - 2 * Poisson_av) * 0.5 * Young_av / (1 + Poisson_av)
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
@@ -151,28 +154,29 @@ def test_square_error_target_stresses_deriv_strain(plot=False):
         diff = np.linalg.norm(diff)
         diff_list.append(diff)
 
-    ### ----- Exponential fit ----- ###
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     ### ----- Plotting (optional) ----- ###
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of square error derivative with respect to strains')
+        ax.set_ylabel('Abs error of partial deriv StressTarget w.r.t. strains')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='o', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
-def test_square_error_target_stresses_deriv_strain_two(plot=False):
+def test_square_error_target_stresses_deriv_strain_two(plot=True):
     """ Check the implementation of the derivative of the target stresses
-        term with respect to the strains on a rectangular grid for two load cases.
+        term with respect to the strains for two load cases.
     """
 
     ### ----- Set-up ----- ###
@@ -185,7 +189,7 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
 
     # Material
     phase = np.random.random(nb_grid_pts).flatten(order='F')
-    Young = 10.
+    Young = 12.
     Poisson = 0.3
 
     # Load cases
@@ -202,7 +206,6 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
     # List of finite differences
     if plot:
         delta_list = [1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7]
-        # delta_list = [1e-5]
     else:
         delta_list = [1e-4, 5e-5]
 
@@ -259,29 +262,30 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
         diff = np.linalg.norm(diff)
         diff_list.append(diff)
 
-    ### ----- Exponential fit ----- ###
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     ### ----- Plotting (optional) ----- ###
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of square error derivative with respect to strains')
+        ax.set_ylabel('Abs error of partial deriv StressTarget w.r.t. strains (two strains)')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='o', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
 
 def test_square_error_target_stresses_deriv_phase(plot=True):
     """ Check the implementation of the derivative of the target stresses
-        term with respect to the strains on a rectangular grid for one load case.
+        term with respect to the phase for two load cases.
     """
 
     ### ----- Set-up ----- ###
@@ -294,12 +298,14 @@ def test_square_error_target_stresses_deriv_phase(plot=True):
 
     # Material
     phase = np.random.random(nb_grid_pts).flatten(order='F')
-    delta_Young = 10.
+    delta_Young = 12.
     delta_Poisson = 0.3
 
     # Load cases
-    DelFs = [np.zeros([dim, dim])]
+    DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
     DelFs[0][0, 0] = 0.01
+    DelFs[1][0, 1] = 0.007 / 2
+    DelFs[1][1, 0] = 0.007 / 2
 
     # muSpectre solver parameters
     tol = 1e-6
@@ -313,9 +319,10 @@ def test_square_error_target_stresses_deriv_phase(plot=True):
         delta_list = [1e-4, 5e-5]
 
     ### ----- Target stresses ----- ###
-    # Stresses for homogenous material with half the Youngs modulus
-    mu = 0.5 * 0.5 * delta_Young / (1 + delta_Poisson)
-    lam = delta_Poisson / (1 - 2 * delta_Poisson) * 0.5 * delta_Young / (1 + delta_Poisson)
+    Young_av = delta_Young / 2
+    Poisson_av = delta_Poisson / 2
+    mu = 0.5 * Young_av / (1 + Poisson_av)
+    lam = Poisson_av / (1 - 2 * Poisson_av) * 0.5 * Young_av / (1 + Poisson_av)
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
@@ -379,24 +386,22 @@ def test_square_error_target_stresses_deriv_phase(plot=True):
         diff = np.linalg.norm(deriv_fin_diff - deriv)
         diff_list.append(diff)
 
-    ### ----- Exponential fit ----- ###
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     ### ----- Plotting (optional) ----- ###
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of square error derivative with respect to phase')
+        ax.set_ylabel('Abs error of partial deriv StressTarget w.r.t. phase')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='o', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='x', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
-
-
-
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6

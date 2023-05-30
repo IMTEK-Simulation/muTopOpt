@@ -6,7 +6,7 @@ import numpy as np
 from muTopOpt.Filter import map_to_unit_range
 from muTopOpt.Filter import map_to_unit_range_derivative
 
-def test_phase_field_rectangular_grid_deriv_phase(plot=False):
+def test_map_to_unit_range_derivative(plot=True):
     """ Check the implementation of the derivative of the filter function.
     """
     # Set up
@@ -35,21 +35,21 @@ def test_phase_field_rectangular_grid_deriv_phase(plot=False):
         diff = np.linalg.norm(deriv_fin_diff - deriv)
         diff_list.append(diff)
 
-    # Exponential fit
-    alpha = np.log(diff_list[0] + 1) / delta_list[0]
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
 
     # Plot (optional)
     if plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ax.set_xlabel('Fin. diff.')
-        ax.set_ylabel('Norm of difference of filter-function derivative')
+        ax.set_ylabel('Abs error of derivative of filter-function')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.plot(delta_list, diff_list, marker='x', label='Calculated')
         delta_list = np.array(delta_list)
-        ax.plot(delta_list, np.exp(alpha * delta_list) - 1, '--', marker='o', label='Exp-fit')
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
         ax.legend()
         plt.show()
 
-    assert abs((np.exp(alpha * delta_list[1]) - 1) - diff_list[1]) <= 1e-6
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
