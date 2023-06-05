@@ -7,6 +7,80 @@ import muSpectre as µ
 from NuMPI import MPI
 from NuMPI.Tools import Reduction
 
+def gradient_rectangular_grid(phase, cell):
+    """ Function to calculate the gradient part of the phase-field on a 2D grid.
+        As discretization rectangles are used.
+
+    Parameters
+    ----------
+    phase: np.ndarray(nb_pixels) of floats
+           Phase field function.
+    cell: object
+          muSpectre cell object
+
+    Returns
+    -------
+    phase_field_gradient: float
+                          Gradient term of the phase-field energy
+    """
+    # Lengths of subdomain
+    hx = cell.domain_lengths[0] / cell.nb_domain_grid_pts[0]
+    hy = cell.domain_lengths[1] / cell.nb_domain_grid_pts[1]
+    Lx = hx * cell.nb_subdomain_grid_pts[0]
+    Ly = hy * cell.nb_subdomain_grid_pts[1]
+
+    # Calculate gradient
+    phase = phase.reshape([*cell.nb_subdomain_grid_pts], order='F')
+    dx = µ.DiscreteDerivative([0, 0], [[-1], [1]])
+    dy = dx.rollaxes()
+    fft = cell.fft_engine
+    q = fft.fftfreq
+    fourier_phase = fft.fetch_or_register_fourier_space_field(
+        "fft_workspace", 1)
+    fft.fft(phase, fourier_phase)
+    d = dx.fourier(q)
+    phase_dx = np.zeros_like(phase, order='f')
+    fft.ifft(d * fourier_phase, phase_dx)
+    phase_dx *= fft.normalisation / hx
+    d = dy.fourier(q)
+    phase_dy = np.zeros_like(phase, order='f')
+    fft.ifft(d * fourier_phase, phase_dy)
+    phase_dy *= fft.normalisation / hy
+
+    # Calculate integral of norm
+    norm_gradient = phase_dx**2 + phase_dy**2
+    integral_gradient = np.average(norm_gradient) * Lx * Ly
+
+    return integral_gradient
+
+def double_well_potential(phase, cell):
+    """ Function to calculate the double-well-potential part of the phase-field on a 2D grid.
+        As discretization rectangles are used.
+
+    Parameters
+    ----------
+    phase: np.ndarray(nb_pixels) of floats
+           Phase field function.
+    cell: object
+          muSpectre cell object
+
+    Returns
+    -------
+    phase_field_double_well: float
+                             Double-well potential of the phase-field-function
+    """
+    # Lengths of subdomain
+    hx = cell.domain_lengths[0] / cell.nb_domain_grid_pts[0]
+    hy = cell.domain_lengths[1] / cell.nb_domain_grid_pts[1]
+    Lx = hx * cell.nb_subdomain_grid_pts[0]
+    Ly = hy * cell.nb_subdomain_grid_pts[1]
+
+     # Double well potential
+    potential = phase**2 * (1-phase)**2
+    integral_potential = np.average(potential) * Lx * Ly
+
+    return integral_potential
+
 def phase_field_rectangular_grid(phase, eta, cell):
     """ Function to calculate the energy of the phase-field on a 2D grid.
         As discretization rectangles are used.
@@ -25,40 +99,8 @@ def phase_field_rectangular_grid(phase, eta, cell):
     phase_field: float
                  Energy of the phase field
     """
-    # Lengths of subdomain
-    hx = cell.domain_lengths[0] / cell.nb_domain_grid_pts[0]
-    hy = cell.domain_lengths[1] / cell.nb_domain_grid_pts[1]
-    Lx = hx * cell.nb_subdomain_grid_pts[0]
-    Ly = hy * cell.nb_subdomain_grid_pts[1]
-
-    # Double well potential
-    potential = phase**2 * (1-phase)**2
-    integral_potential = np.average(potential) * Lx * Ly
-
-    # Gradient part
-    phase = phase.reshape([*cell.nb_subdomain_grid_pts], order='F')
-    dx = µ.DiscreteDerivative([0, 0], [[-1], [1]])
-    dy = dx.rollaxes()
-    fft = cell.fft_engine
-    q = fft.fftfreq
-    fourier_phase = fft.fetch_or_register_fourier_space_field(
-        "fft_workspace", 1)
-    fft.fft(phase, fourier_phase)
-    d = dx.fourier(q)
-    phase_dx = np.zeros_like(phase, order='f')
-    fft.ifft(d * fourier_phase, phase_dx)
-    phase_dx *= fft.normalisation / hx
-    d = dy.fourier(q)
-    phase_dy = np.zeros_like(phase, order='f')
-    fft.ifft(d * fourier_phase, phase_dy)
-    phase_dy *= fft.normalisation / hy
-
-    # Together
-    norm_gradient = phase_dx**2 + phase_dy**2
-    integral_gradient = np.average(norm_gradient) * Lx * Ly
-
     # Global value of face field
-    phase_field = eta * integral_gradient + 1/eta * integral_potential
+    phase_field = eta * gradient_rectangular_grid(phase, cell) + 1/eta * double_well_potential(phase, cell)
     phase_field = Reduction(MPI.COMM_WORLD).sum(phase_field)
 
     return phase_field
