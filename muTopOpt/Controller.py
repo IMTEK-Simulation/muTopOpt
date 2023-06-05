@@ -8,6 +8,7 @@ import muSpectre as µ
 from muSpectre import sensitivity_analysis as sa
 from NuMPI import MPI
 from NuMPI.Tools import Reduction
+from NuMPI.IO import save_npy
 
 from muTopOpt.Filter import map_to_unit_range
 from muTopOpt.Filter import map_to_unit_range_derivative
@@ -234,7 +235,7 @@ def call_function(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, DelFs,
                  tuple(cell.nb_domain_grid_pts), MPI.COMM_WORLD)
     if (MPI.COMM_WORLD.rank == 0) and (file_evo is not None):
         with open(file_evo, 'a') as f:
-            print(function, file=f)
+            print(aim, file=f)
 
     if calc_sens:
         return aim, S.flatten(order='F')
