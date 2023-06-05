@@ -2,8 +2,10 @@
 Functions and code snippets controlling the overall calculation, including
 calling muSpectre.
 """
+import os
 import numpy as np
 import muSpectre as µ
+from muSpectre import sensitivity_analysis as sa
 from NuMPI import MPI
 from NuMPI.Tools import Reduction
 
@@ -14,6 +16,7 @@ from muTopOpt.PhaseField import phase_field_rectangular_grid
 from muTopOpt.StressTarget import square_error_target_stresses
 from muTopOpt.StressTarget import square_error_target_stresses_deriv_strains
 from muTopOpt.StressTarget import square_error_target_stresses_deriv_phase
+#import muTopOpt.sensitivity_analysis as sa
 
 def aim_function(phase, strains, stresses, cell, args):
     """ Calculate the aim function for the optimization.
@@ -121,5 +124,119 @@ def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young,
     derivatives = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
                                                            dstress_dphase_list)
     derivatives *= map_to_unit_range_derivative(phase)
-    derivatives += phase_field_rectangular_grid_deriv_phase(phase, eta, cell)
+    derivatives += weight * phase_field_rectangular_grid_deriv_phase(phase, eta, cell)
     return derivatives
+
+def call_function(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, DelFs,
+                  nb_strain_steps, krylov_solver_args, solver_args, args, gradient=None, weights=None, calc_sens=True,
+                  file_tmp=None, file_last=None, file_evo=None, verbose=False):
+    """ Calculate the aim function and the sensitivity.
+
+    Parameters
+    ----------
+    phase: np.ndarray(nb_pixels) of floats
+           Design parameters.
+    cell: object
+          muSpectre cell object
+    mat: object
+         muSpectre cell object belonging to cell
+    Young1: float
+            Youngs modulus for phase=0
+    Poisson1:float
+             Poissons ratio for phase=0
+    Young2: float
+            Youngs modulus for phase=1
+    Poisson2: float
+             Poissons ratio for phase=1
+    DelFs: list of np.ndarray(dim, dim) of floats
+        List of prescribed macroscopic strain
+    nb_strain_steps: int
+        The prescribed macroscopic strains are applied in nb_strain_steps
+        uniform intervalls.
+    krylov_solver_args: list
+        List of additional arguments passed to the krylov_solver
+    solver_args: list
+        List of additional arguments passed to the solver
+    args: list
+        list with additional arguments passed to the aim function
+    gradient: list
+              Contains the stencils for the discrete derivation operator. Default is None.
+    weights: list of floats
+             Weights for the quadrature points. Default is None.
+    calc_sens: boolean
+               If False, the sensitivity is not calculated. Default is True.
+    file_tmp: string
+              .npy-file for saving the new phase before the muSpectre calculation.
+              After the muSpectre calculation, the file is deleted.
+    file_last: string
+               .npy-file for saving the phase of the last successful optimization step
+    file_func: string
+              .txt file in which the last aim function is added
+    verbose: boolean
+             If True, the last aim function is printed. Default is false.
+    Returns
+    -------
+    aim: float
+         Aim function
+    S: np.ndarray(nb_pixels) of floats
+       Sensitivity
+    """
+    if file_tmp is not None:
+        phase = phase.reshape(*cell.nb_subdomain_grid_pts, order='F')
+        save_npy(file_tmp, phase, tuple(cell.subdomain_locations),
+                 tuple(cell.nb_domain_grid_pts), MPI.COMM_WORLD)
+    phase = phase.flatten(order='F')
+
+    # Change material of cell
+    Young = (Young2 - Young1) * map_to_unit_range(phase) + Young1
+    Poisson = (Poisson2 - Poisson1) * map_to_unit_range(phase) + Poisson1
+    for pixel_id, pixel in cell.pixels.enumerate():
+        quad_id = cell.nb_quad_pts * pixel_id
+        for i in range(cell.nb_quad_pts):
+            mat.set_youngs_modulus_and_poisson_ratio(quad_id + i, Young[pixel_id], Poisson[pixel_id])
+
+    # Solve the equilibrium equations
+    dim = cell.dim
+    shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
+    krylov_solver = µ.solvers.KrylovSolverCG(cell, *krylov_solver_args)
+    strains = []
+    stresses = []
+    for DelF in DelFs:
+        applied_strain = []
+        for s in range(1, nb_strain_steps+1):
+            applied_strain.append(s / nb_strain_steps * DelF)
+        result = µ.solvers.newton_cg(cell, applied_strain, krylov_solver,
+                                     *solver_args)
+        strain = result[nb_strain_steps-1].grad.reshape(shape, order='F').copy()
+        strains.append(strain)
+        stresses.append(cell.evaluate_stress(strain).copy())
+
+    # Calculate the aim function
+    aim = aim_function(phase, strains, stresses, cell, args)
+
+    # Calculate the sensitivity
+    if calc_sens:
+        S = sa.sensitivity_analysis(aim_function_deriv_strains, aim_function_deriv_phase,
+                                    phase, Young1, Poisson1, Young2, Poisson2, cell, krylov_solver,
+                                    strains, stresses, gradient=gradient, weights=weights,
+                                    args=args, filter_func=map_to_unit_range,
+                                    dfilter_dphase=map_to_unit_range_derivative)
+
+    # Remove file with temporary phase if muSpectre calculations worked
+    if MPI.COMM_WORLD.rank == 0:
+        if file_tmp is not None:
+            os.remove(file_tmp)
+
+    # Save the last step
+    if file_last is not None:
+        phase = phase.reshape(*cell.nb_subdomain_grid_pts, order='F')
+        save_npy(file_last, phase, tuple(cell.subdomain_locations),
+                 tuple(cell.nb_domain_grid_pts), MPI.COMM_WORLD)
+    if (MPI.COMM_WORLD.rank == 0) and (file_evo is not None):
+        with open(file_evo, 'a') as f:
+            print(function, file=f)
+
+    if calc_sens:
+        return aim, S.flatten(order='F')
+    else:
+        return aim
