@@ -65,7 +65,7 @@ def test_square_error_target_stresses():
 
     assert abs(sq_error) < 1e-7
 
-def test_square_error_target_stresses_deriv_strain(plot=True):
+def test_square_error_target_stresses_deriv_strain(plot=False):
     """ Check the implementation of the derivative of the target stresses
         term with respect to the strains for one load case.
     """
@@ -174,7 +174,7 @@ def test_square_error_target_stresses_deriv_strain(plot=True):
 
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
-def test_square_error_target_stresses_deriv_strain_two(plot=True):
+def test_square_error_target_stresses_deriv_strain_two(plot=False):
     """ Check the implementation of the derivative of the target stresses
         term with respect to the strains for two load cases.
     """
@@ -283,7 +283,7 @@ def test_square_error_target_stresses_deriv_strain_two(plot=True):
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
 
-def test_square_error_target_stresses_deriv_phase(plot=True):
+def test_square_error_target_stresses_deriv_phase(plot=False):
     """ Check the implementation of the derivative of the target stresses
         term with respect to the phase for two load cases.
     """

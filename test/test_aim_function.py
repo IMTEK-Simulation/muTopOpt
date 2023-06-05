@@ -16,7 +16,7 @@ from muTopOpt.StressTarget import square_error_target_stresses
 from muTopOpt.StressTarget import square_error_target_stresses_deriv_strains
 from muTopOpt.StressTarget import square_error_target_stresses_deriv_phase
 
-def test_aim_function_deriv_strains(plot=True):
+def test_aim_function_deriv_strains(plot=False):
     """ Check the implementation of the partial derivative of the aim
         function with respect to the strains for two load cases.
     """
@@ -129,7 +129,7 @@ def test_aim_function_deriv_strains(plot=True):
 
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
-def test_square_error_target_stresses_deriv_strains_two_quad(plot=True):
+def test_square_error_target_stresses_deriv_strains_two_quad(plot=False):
     """ Check the implementation of the partial derivative of the aim
         function with respect to the strains for two load cases and two quadrature points.
     """
@@ -247,7 +247,7 @@ def test_square_error_target_stresses_deriv_strains_two_quad(plot=True):
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
 
-def test_square_error_target_stresses_deriv_phase(plot=True):
+def test_square_error_target_stresses_deriv_phase(plot=False):
     """ Check the implementation of the partial derivative of the aim
         function with respect to the phase for two load cases.
     """

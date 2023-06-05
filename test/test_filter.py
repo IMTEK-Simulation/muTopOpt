@@ -6,7 +6,7 @@ import numpy as np
 from muTopOpt.Filter import map_to_unit_range
 from muTopOpt.Filter import map_to_unit_range_derivative
 
-def test_map_to_unit_range_derivative(plot=True):
+def test_map_to_unit_range_derivative(plot=False):
     """ Check the implementation of the derivative of the filter function.
     """
     # Set up

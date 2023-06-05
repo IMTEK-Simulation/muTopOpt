@@ -21,7 +21,7 @@ from muTopOpt.StressTarget import square_error_target_stresses_deriv_phase
 ###########################################################################
 ### -------------------- Test only phase-field term ------------------- ###
 ###########################################################################
-def test_sensitivity_only_phase_field(plot=True):
+def test_sensitivity_only_phase_field(plot=False):
     ### ----- Aim function + partial derivatives ----- ###
     def aim_phase(phase, strains, stresses, cell, args):
         return phase_field_rectangular_grid(phase, args[2], cell)
@@ -172,7 +172,7 @@ def test_sensitivity_only_phase_field(plot=True):
 ###########################################################################
 ### ----------------- Test only target stresses term ------------------ ###
 ###########################################################################
-def test_sensitivity_target_stresses_no_filter(plot=True):
+def test_sensitivity_target_stresses_no_filter(plot=False):
     """ Test the sensitivity of the target stresses without
         a filter function.
     """
@@ -333,7 +333,7 @@ def test_sensitivity_target_stresses_no_filter(plot=True):
 
     assert abs(a * delta_list[1] - diff_list[1]) <= 5e-6
 
-def test_sensitivity_target_stresses_filter(plot=True):
+def test_sensitivity_target_stresses_filter(plot=False):
     """ Test the sensitivity of the target stresses with
         a filter function.
     """
@@ -446,7 +446,7 @@ def test_sensitivity_target_stresses_filter(plot=True):
 ### --------------- Test complete sensitivity analysis ---------------- ###
 ###########################################################################
 
-def test_sensitivity_analysis_complete(plot=True):
+def test_sensitivity_analysis_complete(plot=False):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -553,7 +553,7 @@ def test_sensitivity_analysis_complete(plot=True):
     assert abs(a * delta_list[1] - diff_list[1]) <= 5e-5
 
 
-def test_sensitivity_analysis_complete_two_quad(plot=True):
+def test_sensitivity_analysis_complete_two_quad(plot=False):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]

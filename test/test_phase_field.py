@@ -32,7 +32,7 @@ from muTopOpt.PhaseField import phase_field_rectangular_grid_deriv_phase
 from muTopOpt.PhaseField import phase_field_rectangular_grid
 
 
-def test_phase_field_rectangular_grid_deriv_phase(plot=True):
+def test_phase_field_rectangular_grid_deriv_phase(plot=False):
     """ Check the implementation of the derivative of the phase field
         term with respect to the phase on a rectangular grid.
     """

@@ -10,7 +10,7 @@ from muSpectre import sensitivity_analysis as sa
 # Comment: Is also tested in muSpectre
 # but here more variants are tested
 
-def test_dstress_dphase(plot=True):
+def test_dstress_dphase(plot=False):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -116,7 +116,7 @@ def test_dstress_dphase(plot=True):
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
 
-def test_dstress_dphase_void(plot=True):
+def test_dstress_dphase_void(plot=False):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -222,7 +222,7 @@ def test_dstress_dphase_void(plot=True):
 
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
-def test_dstress_dphase_two_strains(plot=True):
+def test_dstress_dphase_two_strains(plot=False):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
@@ -330,7 +330,7 @@ def test_dstress_dphase_two_strains(plot=True):
 
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
-def test_dstress_dphase_2_quad_pts(plot=True):
+def test_dstress_dphase_2_quad_pts(plot=False):
     ### ----- Set up ----- ###
     # Discretization
     nb_grid_pts = [5, 7]
