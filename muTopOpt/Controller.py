@@ -130,7 +130,7 @@ def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young,
 
 def call_function(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, DelFs,
                   nb_strain_steps, krylov_solver_args, solver_args, args, gradient=None, weights=None, calc_sens=True,
-                  file_tmp=None, file_last=None, file_evo=None, verbose=False):
+                  file_tmp=None, file_last=None, file_evo=None, file_evo_details=None, verbose=False):
     """ Calculate the aim function and the sensitivity.
 
     Parameters
@@ -171,8 +171,10 @@ def call_function(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, DelFs,
               After the muSpectre calculation, the file is deleted.
     file_last: string
                .npy-file for saving the phase of the last successful optimization step
-    file_func: string
-              .txt file in which the last aim function is added
+    file_evo: string
+             .txt file in which the last aim function is added
+    file_evo_details: string
+                      .txt file in which the last aim function and some details are added
     verbose: boolean
              If True, the last aim function is printed. Default is false.
     Returns
@@ -236,6 +238,14 @@ def call_function(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, DelFs,
     if (MPI.COMM_WORLD.rank == 0) and (file_evo is not None):
         with open(file_evo, 'a') as f:
             print(aim, file=f)
+    if file_evo_details is not None:
+        sq_err = square_error_target_stresses(cell, strains, stresses, args[0])
+        ph_field = args[1] * phase_field_rectangular_grid(phase, args[2], cell)
+        norm_S = np.linalg.norm(S)**2
+        norm_S = np.sqrt(Reduction(MPI.COMM_WORLD).sum(norm_S))
+        if (MPI.COMM_WORLD.rank == 0):
+            with open(file_evo_details, 'a') as f:
+                print(aim, sq_err, ph_field, norm_S, file=f)
 
     if calc_sens:
         return aim, S.flatten(order='F')
