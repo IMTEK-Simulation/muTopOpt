@@ -30,6 +30,8 @@ import muSpectre as µ
 
 from muTopOpt.PhaseField import phase_field_rectangular_grid_deriv_phase
 from muTopOpt.PhaseField import phase_field_rectangular_grid
+from muTopOpt.PhaseField import phase_field_parallelogram_grid_deriv_phase
+from muTopOpt.PhaseField import phase_field_parallelogram_grid
 
 
 def test_phase_field_rectangular_grid_deriv_phase(plot=False):
@@ -86,3 +88,60 @@ def test_phase_field_rectangular_grid_deriv_phase(plot=False):
         plt.show()
 
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
+
+
+def test_phase_field_parallelogram_grid_deriv_phase(plot=False):
+    """ Check the implementation of the derivative of the phase field
+        term with respect to the phase on a parallelogram grid.
+    """
+    # Set up
+    nb_grid_pts = [5, 7]
+    lengths = [2.5, 3.1]
+    formulation = µ.Formulation.small_strain
+    cell = µ.Cell(nb_grid_pts, lengths, formulation)
+
+    eta = 0.8
+
+    phase = np.random.random(nb_grid_pts).flatten(order='F')
+
+    if plot:
+        delta_list = [1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7]
+    else:
+        delta_list = [1e-4, 5e-5]
+
+    # Calculate derivative
+    ph_field = phase_field_parallelogram_grid(phase, eta, cell)
+    deriv = phase_field_parallelogram_grid_deriv_phase(phase, eta, cell)
+
+    # Finite difference calculation of the derivative
+    diff_list = []
+    for delta in delta_list:
+        deriv_fin_diff = np.empty(deriv.shape)
+        for i in range(len(deriv)):
+            phase[i] += delta
+            ph_field_plus = phase_field_parallelogram_grid(phase, eta, cell)
+            deriv_fin_diff[i] = (ph_field_plus - ph_field) / delta
+            phase[i] -= delta
+
+        diff = np.linalg.norm(deriv_fin_diff - deriv)
+        diff_list.append(diff)
+
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
+
+    # Plot (optional)
+    if plot:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.set_xlabel('Fin. diff.')
+        ax.set_ylabel('Abs error of phase field derivative')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.plot(delta_list, diff_list, marker='x', label='Calculated')
+        delta_list = np.array(delta_list)
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
+        ax.legend()
+        plt.show()
+
+    assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
+
