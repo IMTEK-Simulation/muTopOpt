@@ -21,7 +21,7 @@ def test_square_error_target_stresses():
     cell = µ.Cell(nb_grid_pts, lengths, formulation)
 
     # Material
-    Young = 10.
+    Young = 11.
     Poisson = 0.3
     mat = µ.material.MaterialLinearElastic4_2d.make(cell, "material")
     for pixel_id in cell.pixel_indices:
@@ -29,7 +29,8 @@ def test_square_error_target_stresses():
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.02
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
 
@@ -47,6 +48,8 @@ def test_square_error_target_stresses():
     ana_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / Young
         ana_stresses.append(stress)
 
     # muSpectre calculations
@@ -61,7 +64,8 @@ def test_square_error_target_stresses():
         strains.append(strain)
 
     ### ----- Test square_error_target_stresses() ----- ###
-    sq_error = square_error_target_stresses(cell, strains, stresses, ana_stresses)
+    sq_error = square_error_target_stresses(cell, strains, stresses,
+                                            ana_stresses, loading, Young)
 
     assert abs(sq_error) < 1e-7
 
@@ -81,12 +85,13 @@ def test_square_error_target_stresses_deriv_strain(plot=False):
     # Material
     np.random.seed(1)
     phase = np.random.random(nb_grid_pts).flatten(order='F')
-    Young = 12.
-    Poisson = 0.3
+    Young0 = 12.
+    Poisson0 = 0.3
 
     # Load cases
     DelFs = [np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.02
+    DelFs[0][0, 0] = loading
 
     # muSpectre solver parameters
     tol = 1e-6
@@ -101,19 +106,21 @@ def test_square_error_target_stresses_deriv_strain(plot=False):
 
     ### ----- Target stresses ----- ###
     # Stresses for homogenous material with half the Youngs modulus
-    Young_av = Young / 2
-    Poisson_av = Poisson / 2
+    Young_av = Young0 / 2
+    Poisson_av = Poisson0 / 2
     mu = 0.5 * Young_av / (1 + Poisson_av)
     lam = Poisson_av / (1 - 2 * Poisson_av) * 0.5 * Young_av / (1 + Poisson_av)
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / Young0
         target_stresses.append(stress)
 
     ### ----- Analytical derivative ----- ###
     # Material initialization
-    Young = Young * phase
-    Poisson = Poisson * phase
+    Young = Young0 * phase
+    Poisson = Poisson0 * phase
     mat = µ.material.MaterialLinearElastic4_2d.make(cell, "material")
     for pixel_id in cell.pixel_indices:
             mat.add_pixel(pixel_id, Young[pixel_id], Poisson[pixel_id])
@@ -132,8 +139,10 @@ def test_square_error_target_stresses_deriv_strain(plot=False):
         strains.append(strain)
 
     # Function and derivative
-    sq_err = square_error_target_stresses(cell, strains, stresses, target_stresses)
-    derivs = square_error_target_stresses_deriv_strains(cell, strains, stresses, target_stresses)
+    sq_err = square_error_target_stresses(cell, strains, stresses, target_stresses,
+                                          loading, Young0)
+    derivs = square_error_target_stresses_deriv_strains(cell, strains, stresses,
+                                                        target_stresses, loading, Young0)
 
     ### ----- Finite difference derivatives ----- ###
     shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
@@ -146,7 +155,8 @@ def test_square_error_target_stresses_deriv_strain(plot=False):
             for i in range(len(deriv)):
                 strain[i] += delta
                 helper_stresses[i_case] = cell.evaluate_stress(strain.reshape(shape, order='F'))
-                sq_err_plus = square_error_target_stresses(cell, strains, helper_stresses, target_stresses)
+                sq_err_plus = square_error_target_stresses(cell, strains, helper_stresses,
+                                                           target_stresses, loading, Young0)
                 deriv_fin_diff[i] = (sq_err_plus - sq_err) / delta
                 strain[i] -= delta
             helper_stresses[i_case]
@@ -189,12 +199,13 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
 
     # Material
     phase = np.random.random(nb_grid_pts).flatten(order='F')
-    Young = 12.
-    Poisson = 0.3
+    Young0 = 12.
+    Poisson0 = 0.3
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.013
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
 
@@ -211,17 +222,19 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
 
     ### ----- Target stresses ----- ###
     # Stresses for homogenous material with half the Youngs modulus
-    mu = 0.5 * 0.5 * Young / (1 + Poisson)
-    lam = Poisson / (1 - 2 * Poisson) * 0.5 * Young / (1 + Poisson)
+    mu = 0.5 * 0.5 * Young0 / (1 + Poisson0)
+    lam = Poisson0 / (1 - 2 * Poisson0) * 0.5 * Young0 / (1 + Poisson0)
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / Young0
         target_stresses.append(stress)
 
     ### ----- Analytical derivative ----- ###
     # Material initialization
-    Young = Young * phase
-    Poisson = Poisson * phase
+    Young = Young0 * phase
+    Poisson = Poisson0 * phase
     mat = µ.material.MaterialLinearElastic4_2d.make(cell, "material")
     for pixel_id in cell.pixel_indices:
             mat.add_pixel(pixel_id, Young[pixel_id], Poisson[pixel_id])
@@ -240,8 +253,10 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
         strains.append(strain)
 
     # Function and derivative
-    sq_err = square_error_target_stresses(cell, strains, stresses, target_stresses)
-    derivs = square_error_target_stresses_deriv_strains(cell, strains, stresses, target_stresses)
+    sq_err = square_error_target_stresses(cell, strains, stresses, target_stresses,
+                                          loading, Young0)
+    derivs = square_error_target_stresses_deriv_strains(cell, strains, stresses,
+                                                        target_stresses, loading, Young0)
 
     ### ----- Finite difference derivatives ----- ###
     shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
@@ -254,7 +269,8 @@ def test_square_error_target_stresses_deriv_strain_two(plot=False):
             for i in range(len(deriv)):
                 strain[i] += delta
                 helper_stresses[i_case] = cell.evaluate_stress(strain.reshape(shape, order='F'))
-                sq_err_plus = square_error_target_stresses(cell, strains, helper_stresses, target_stresses)
+                sq_err_plus = square_error_target_stresses(cell, strains, helper_stresses,
+                                                           target_stresses, loading, Young0)
                 deriv_fin_diff[i] = (sq_err_plus - sq_err) / delta
                 strain[i] -= delta
             helper_stresses[i_case] = stresses[i_case].copy()
@@ -303,7 +319,8 @@ def test_square_error_target_stresses_deriv_phase(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.011
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
 
@@ -326,6 +343,8 @@ def test_square_error_target_stresses_deriv_phase(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / delta_Young
         target_stresses.append(stress)
 
     ### ----- Analytical derivative ----- ###
@@ -353,8 +372,11 @@ def test_square_error_target_stresses_deriv_phase(plot=False):
                                                       delta_Poisson)
 
     # Function and derivative
-    sq_err = square_error_target_stresses(cell, strains, stresses, target_stresses)
-    deriv = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses, dstress_dphase_list)
+    sq_err = square_error_target_stresses(cell, strains, stresses, target_stresses,
+                                          loading, delta_Young)
+    deriv = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
+                                                     dstress_dphase_list, loading,
+                                                     delta_Young)
 
     ### ----- Finite difference derivatives ----- ###
     shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
@@ -379,7 +401,8 @@ def test_square_error_target_stresses_deriv_phase(plot=False):
                 stresses.append(stress.copy())
 
             # Derivative of square_error_target_stresses()
-            sq_err_plus = square_error_target_stresses(cell, strains, stresses, target_stresses)
+            sq_err_plus = square_error_target_stresses(cell, strains, stresses,
+                                                       target_stresses, loading, delta_Young)
             deriv_fin_diff[i] = (sq_err_plus - sq_err) / delta
             phase[i] -= delta
 

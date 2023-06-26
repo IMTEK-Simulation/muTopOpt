@@ -51,7 +51,8 @@ def test_sensitivity_only_phase_field(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.01
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
     nb_strain_steps = 1
@@ -83,8 +84,10 @@ def test_sensitivity_only_phase_field(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / Young2
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young2)
 
     # Initialize cell
     cell = µ.Cell(nb_grid_pts, lengths, formulation)
@@ -179,17 +182,20 @@ def test_sensitivity_target_stresses_no_filter(plot=False):
     """
     ### ----- Aim function + partial derivatives ----- ###
     def aim_no_filter(phase, strains, stresses, cell, args):
-        return square_error_target_stresses(cell, strains, stresses, args[0])
+        return square_error_target_stresses(cell, strains, stresses, args[0],
+                                            args[3], args[4])
 
     def aim_no_filter_deriv_strains(phase, strains, stresses, cell, args):
         return square_error_target_stresses_deriv_strains(cell, strains,
-                                                          stresses, args[0])
+                                                          stresses, args[0],
+                                                          args[3], args[4])
 
     def aim_no_filter_deriv_phase(phase, strains, stresses, cell, Young,
                               delta_Young, Poisson, delta_Poisson,
                               dstress_dphase_list, args):
         return square_error_target_stresses_deriv_phase(cell, stresses, args[0],
-                                                        dstress_dphase_list)
+                                                        dstress_dphase_list,
+                                                        args[3], args[4])
 
     ### ----- Set up ----- ###
     # Discretization
@@ -207,7 +213,8 @@ def test_sensitivity_target_stresses_no_filter(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.011
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
     nb_strain_steps = 1
@@ -239,8 +246,10 @@ def test_sensitivity_target_stresses_no_filter(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalization
+        stress = stress / Young2 / loading
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young2)
 
     # Initialize cell
     cell = µ.Cell(nb_grid_pts, lengths, formulation)
@@ -332,7 +341,7 @@ def test_sensitivity_target_stresses_no_filter(plot=False):
         ax.legend()
         plt.show()
 
-    assert abs(a * delta_list[1] - diff_list[1]) <= 5e-6
+    assert abs(a * delta_list[2] - diff_list[2]) <= 1e-5
 
 def test_sensitivity_target_stresses_filter(plot=False):
     """ Test the sensitivity of the target stresses with
@@ -357,7 +366,8 @@ def test_sensitivity_target_stresses_filter(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.009
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
     nb_strain_steps = 1
@@ -389,8 +399,10 @@ def test_sensitivity_target_stresses_filter(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalization
+        stress = stress / Young2 / loading
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young2)
 
     # Initialize cell
     cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights)
@@ -404,7 +416,8 @@ def test_sensitivity_target_stresses_filter(plot=False):
     # Calculate aim function + sensitivity
     aim, S = call_function(phase, cell, mat, Young1, Poisson1,
                            Young2, Poisson2, DelFs, nb_strain_steps,
-                           krylov_solver_args, solver_args, args, calc_sens=True, gradient=gradient, weights=weights)
+                           krylov_solver_args, solver_args, args, calc_sens=True,
+                           gradient=gradient, weights=weights)
 
     ### ----- Finite difference derivation ----- ###
     shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
@@ -415,8 +428,10 @@ def test_sensitivity_target_stresses_filter(plot=False):
         for i in range(len(phase)):
             phase[i] += delta
             aim_plus = call_function(phase, cell, mat, Young1, Poisson1,
-                                Young2, Poisson2, DelFs, nb_strain_steps,
-                                krylov_solver_args, solver_args, args, calc_sens=False, gradient=gradient, weights=weights)
+                                     Young2, Poisson2, DelFs, nb_strain_steps,
+                                     krylov_solver_args, solver_args, args,
+                                     calc_sens=False, gradient=gradient,
+                                     weights=weights)
             S_fin_diff[i] = (aim_plus - aim) / delta
             phase[i] -= delta
 
@@ -446,7 +461,6 @@ def test_sensitivity_target_stresses_filter(plot=False):
 ###########################################################################
 ### --------------- Test complete sensitivity analysis ---------------- ###
 ###########################################################################
-
 def test_sensitivity_analysis_complete(plot=False):
     ### ----- Set up ----- ###
     # Discretization
@@ -467,7 +481,8 @@ def test_sensitivity_analysis_complete(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.009
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
     nb_strain_steps = 1
@@ -499,8 +514,10 @@ def test_sensitivity_analysis_complete(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalization
+        stress = stress / Young2 / loading
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young2)
 
     # Initialize cell
     cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights)
@@ -575,7 +592,8 @@ def test_sensitivity_analysis_complete_two_quad(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.009
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
     nb_strain_steps = 1
@@ -607,8 +625,10 @@ def test_sensitivity_analysis_complete_two_quad(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalization
+        stress = stress / Young2 / loading
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young2)
 
     # Initialize cell
     cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights)
@@ -686,7 +706,8 @@ def test_sensitivity_analysis_parallelograms(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.009
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
     nb_strain_steps = 1
@@ -718,8 +739,10 @@ def test_sensitivity_analysis_parallelograms(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalization
+        stress = stress / Young2 / loading
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young2)
 
     # Initialize cell
     cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights)

@@ -31,12 +31,13 @@ def test_aim_function_deriv_strains(plot=False):
 
     # Material
     phase = np.random.random(nb_grid_pts).flatten(order='F')
-    Young = 12.
-    Poisson = 0.3
+    Young0 = 12.
+    Poisson0 = 0.3
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.009
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
 
@@ -57,18 +58,20 @@ def test_aim_function_deriv_strains(plot=False):
 
     ### ----- Target stresses ----- ###
     # Stresses for homogenous material with half the Youngs modulus
-    mu = 0.5 * 0.5 * Young / (1 + Poisson)
-    lam = Poisson / (1 - 2 * Poisson) * 0.5 * Young / (1 + Poisson)
+    mu = 0.5 * 0.5 * Young0 / (1 + Poisson0)
+    lam = Poisson0 / (1 - 2 * Poisson0) * 0.5 * Young0 / (1 + Poisson0)
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / Young0
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young0)
 
     ### ----- Analytical derivative ----- ###
     # Material initialization
-    Young = Young * map_to_unit_range(phase)
-    Poisson = Poisson * map_to_unit_range(phase)
+    Young = Young0 * map_to_unit_range(phase)
+    Poisson = Poisson0 * map_to_unit_range(phase)
     mat = µ.material.MaterialLinearElastic4_2d.make(cell, "material")
     for pixel_id in cell.pixel_indices:
             mat.add_pixel(pixel_id, Young[pixel_id], Poisson[pixel_id])
@@ -147,12 +150,13 @@ def test_square_error_target_stresses_deriv_strains_two_quad(plot=False):
 
     # Material
     phase = np.random.random(nb_grid_pts).flatten(order='F')
-    Young = 12.
-    Poisson = 0.3
+    Young0 = 12.
+    Poisson0 = 0.3
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.009
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
 
@@ -173,19 +177,21 @@ def test_square_error_target_stresses_deriv_strains_two_quad(plot=False):
 
     ### ----- Target stresses ----- ###
     # Stresses for homogenous material with half the Youngs modulus
-    mu = 0.5 * 0.5 * Young / (1 + Poisson)
-    lam = Poisson / (1 - 2 * Poisson) * 0.5 * Young / (1 + Poisson)
+    mu = 0.5 * 0.5 * Young0 / (1 + Poisson0)
+    lam = Poisson0 / (1 - 2 * Poisson0) * 0.5 * Young0 / (1 + Poisson0)
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / Young0
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, Young0)
 
     ### ----- Analytical derivative ----- ###
     cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights=weights)
     # Material initialization
-    Young = Young * phase
-    Poisson = Poisson * phase
+    Young = Young0 * phase
+    Poisson = Poisson0 * phase
     mat = µ.material.MaterialLinearElastic4_2d.make(cell, "material")
     for pixel_id in cell.pixel_indices:
             mat.add_pixel(pixel_id, Young[pixel_id], Poisson[pixel_id])
@@ -267,7 +273,8 @@ def test_square_error_target_stresses_deriv_phase(plot=False):
 
     # Load cases
     DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
-    DelFs[0][0, 0] = 0.01
+    loading = 0.013
+    DelFs[0][0, 0] = loading
     DelFs[1][0, 1] = 0.007 / 2
     DelFs[1][1, 0] = 0.007 / 2
 
@@ -294,8 +301,10 @@ def test_square_error_target_stresses_deriv_phase(plot=False):
     target_stresses = []
     for DelF in DelFs:
         stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalize
+        stress = stress / loading / delta_Young
         target_stresses.append(stress)
-    args = (target_stresses, weight, eta)
+    args = (target_stresses, weight, eta, loading, delta_Young)
 
     ### ----- Analytical derivative ----- ###
     # Material initialization

@@ -51,6 +51,9 @@ def gradient_rectangular_grid(phase, cell):
     norm_gradient = phase_dx**2 + phase_dy**2
     integral_gradient = np.average(norm_gradient) * Lx * Ly
 
+    # Nondimensionalize
+    integral_gradient = integral_gradient / cell.domain_lengths[0]
+
     return integral_gradient
 
 def gradient_parallelogram_grid(phase, cell):
@@ -97,6 +100,9 @@ def gradient_parallelogram_grid(phase, cell):
     norm_gradient = phase_dx**2 + phase_dy**2
     integral_gradient = np.average(norm_gradient) * Lx * Ly
 
+    # Nondimensionalize
+    integral_gradient = integral_gradient / cell.domain_lengths[0]
+
     return integral_gradient
 
 def double_well_potential(phase, cell):
@@ -124,6 +130,9 @@ def double_well_potential(phase, cell):
      # Double well potential
     potential = phase**2 * (1-phase)**2
     integral_potential = np.average(potential) * Lx * Ly
+
+    # Nondimensionalize
+    integral_potential = integral_potential / cell.domain_lengths[0]
 
     return integral_potential
 
@@ -203,7 +212,7 @@ def phase_field_rectangular_grid_deriv_phase(phase, eta, cell):
 
     # Derivative of the double well potential
     derivative = 1/eta * 2 * phase * (1-phase) * (1-2*phase) *\
-                  lengths[0] * lengths[1] / nb_pixels
+                  lengths[1] / nb_pixels
 
     # Derivative of gradient term
     phase = phase.reshape([*cell.nb_subdomain_grid_pts], order='F')
@@ -228,7 +237,7 @@ def phase_field_rectangular_grid_deriv_phase(phase, eta, cell):
     deriv_phase_dy = deriv_phase_dy.flatten(order='F')
 
     derivative += 2 * eta * (deriv_phase_dx + deriv_phase_dy) *\
-                  lengths[0] * lengths[1] / nb_pixels
+                  lengths[1] / nb_pixels
 
     return derivative
 
@@ -261,7 +270,7 @@ def phase_field_parallelogram_grid_deriv_phase(phase, eta, cell):
 
     # Derivative of the double well potential
     derivative = 1/eta * 2 * phase * (1-phase) * (1-2*phase) *\
-                  lengths[0] * lengths[1] / nb_pixels
+                     lengths[1] / nb_pixels
 
     # Derivative of gradient term
     phase = phase.reshape([*cell.nb_subdomain_grid_pts], order='F')
@@ -286,6 +295,6 @@ def phase_field_parallelogram_grid_deriv_phase(phase, eta, cell):
     deriv_phase_dy = deriv_phase_dy.flatten(order='F')
 
     derivative += eta * (deriv_phase_dx + deriv_phase_dy) *\
-                  lengths[0] * lengths[1] / nb_pixels
+                  lengths[1] / nb_pixels
 
     return derivative

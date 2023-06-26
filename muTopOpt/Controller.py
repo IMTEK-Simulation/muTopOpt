@@ -44,6 +44,10 @@ def aim_function(phase, strains, stresses, cell, args):
                 Weighting parameter between the phase field and the target stresses.
         eta: float
              Weighting parameter of the phase field energy. A larger eta means a broader interface.
+        loading: float
+                 Strain with which the stresses are nondimensionalized
+        Young: float
+               Youngs modulus with wich the stresses are nondimensionalized
     Returns
     -------
     aim: float
@@ -52,7 +56,9 @@ def aim_function(phase, strains, stresses, cell, args):
     target_stresses = args[0]
     weight = args[1]
     eta = args[2]
-    aim = square_error_target_stresses(cell, strains, stresses, target_stresses)
+    loading = args[3]
+    Young = args[4]
+    aim = square_error_target_stresses(cell, strains, stresses, target_stresses, loading, Young)
     aim += weight * phase_field_rectangular_grid(phase, eta, cell)
     return aim
 
@@ -77,13 +83,20 @@ def aim_function_deriv_strains(phase, strains, stresses, cell, args):
                 Weighting parameter between the phase field and the target stresses.
         eta: float
              Weighting parameter of the phase field energy. A larger eta means a broader interface.
+        loading: float
+                 Strain with which the stresses are nondimensionalized
+        Young: float
+
     Returns
     -------
     derivatives: list of np.ndarrays(dim**2 * nb_quad_pts * nb_pixels) of floats
                  Partial derivatives of the aim function with respect to the strains.
     """
     target_stresses = args[0]
-    derivatives = square_error_target_stresses_deriv_strains(cell, strains, stresses, target_stresses)
+    loading = args[3]
+    Young = args[4]
+    derivatives = square_error_target_stresses_deriv_strains(cell, strains, stresses,
+                                                             target_stresses, loading, Young)
     return derivatives
 
 def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young, Poisson,
@@ -118,6 +131,10 @@ def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young,
                 Weighting parameter between the phase field and the target stresses.
         eta: float
              Weighting parameter of the phase field energy. A larger eta means a broader interface.
+        loading: float
+                 Strain with which the stresses are nondimensionalized
+        Young: float
+
     Returns
     -------
     derivatives: np.ndarray(nb_pixels) of floats
@@ -126,8 +143,10 @@ def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young,
     target_stresses = args[0]
     weight = args[1]
     eta = args[2]
+    loading = args[3]
+    Young = args[4]
     derivatives = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
-                                                           dstress_dphase_list)
+                                                           dstress_dphase_list, loading, Young)
     derivatives *= map_to_unit_range_derivative(phase)
     derivatives += weight * phase_field_rectangular_grid_deriv_phase(phase, eta, cell)
     return derivatives
@@ -243,7 +262,7 @@ def call_function(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, DelFs,
         with open(file_evo, 'a') as f:
             print(aim, file=f)
     if file_evo_details is not None:
-        sq_err = square_error_target_stresses(cell, strains, stresses, args[0])
+        sq_err = square_error_target_stresses(cell, strains, stresses, args[0], args[3], args[4])
         ph_field = args[1] * phase_field_rectangular_grid(phase, args[2], cell)
         norm_S = np.linalg.norm(S)**2
         norm_S = np.sqrt(Reduction(MPI.COMM_WORLD).sum(norm_S))
@@ -278,6 +297,10 @@ def aim_function_parall(phase, strains, stresses, cell, args):
                 Weighting parameter between the phase field and the target stresses.
         eta: float
              Weighting parameter of the phase field energy. A larger eta means a broader interface.
+        loading: float
+                 Strain with which the stresses are nondimensionalized
+        Young: float
+
     Returns
     -------
     aim: float
@@ -286,7 +309,10 @@ def aim_function_parall(phase, strains, stresses, cell, args):
     target_stresses = args[0]
     weight = args[1]
     eta = args[2]
-    aim = square_error_target_stresses(cell, strains, stresses, target_stresses)
+    loading = args[3]
+    Young = args[4]
+    aim = square_error_target_stresses(cell, strains, stresses, target_stresses,
+                                       loading, Young)
     aim += weight * phase_field_parallelogram_grid(phase, eta, cell)
     return aim
 
@@ -311,13 +337,20 @@ def aim_function_parall_deriv_strains(phase, strains, stresses, cell, args):
                 Weighting parameter between the phase field and the target stresses.
         eta: float
              Weighting parameter of the phase field energy. A larger eta means a broader interface.
+        loading: float
+                 Strain with which the stresses are nondimensionalized
+        Young: float
+
     Returns
     -------
     derivatives: list of np.ndarrays(dim**2 * nb_quad_pts * nb_pixels) of floats
                  Partial derivatives of the aim function with respect to the strains.
     """
     target_stresses = args[0]
-    derivatives = square_error_target_stresses_deriv_strains(cell, strains, stresses, target_stresses)
+    loading = args[3]
+    Young = args[4]
+    derivatives = square_error_target_stresses_deriv_strains(cell, strains, stresses,
+                                                             target_stresses, loading, Young)
     return derivatives
 
 def aim_function_parall_deriv_phase(phase, strains, stresses, cell, Young, delta_Young, Poisson,
@@ -352,6 +385,10 @@ def aim_function_parall_deriv_phase(phase, strains, stresses, cell, Young, delta
                 Weighting parameter between the phase field and the target stresses.
         eta: float
              Weighting parameter of the phase field energy. A larger eta means a broader interface.
+        loading: float
+                 Strain with which the stresses are nondimensionalized
+        Young: float
+
     Returns
     -------
     derivatives: np.ndarray(nb_pixels) of floats
@@ -360,8 +397,10 @@ def aim_function_parall_deriv_phase(phase, strains, stresses, cell, Young, delta
     target_stresses = args[0]
     weight = args[1]
     eta = args[2]
+    loading = args[3]
+    Young = args[4]
     derivatives = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
-                                                           dstress_dphase_list)
+                                                           dstress_dphase_list, loading, Young)
     derivatives *= map_to_unit_range_derivative(phase)
     derivatives += weight * phase_field_parallelogram_grid_deriv_phase(phase, eta, cell)
     return derivatives
@@ -477,7 +516,7 @@ def call_function_parall(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, D
         with open(file_evo, 'a') as f:
             print(aim, file=f)
     if file_evo_details is not None:
-        sq_err = square_error_target_stresses(cell, strains, stresses, args[0])
+        sq_err = square_error_target_stresses(cell, strains, stresses, args[0], args[3], args[4])
         ph_field = args[1] * phase_field_parallelogram_grid(phase, args[2], cell)
         norm_S = np.linalg.norm(S)**2
         norm_S = np.sqrt(Reduction(MPI.COMM_WORLD).sum(norm_S))
