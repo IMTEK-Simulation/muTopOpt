@@ -19,7 +19,6 @@ from muTopOpt.PhaseField import phase_field_parallelogram_grid
 from muTopOpt.StressTarget import square_error_target_stresses
 from muTopOpt.StressTarget import square_error_target_stresses_deriv_strains
 from muTopOpt.StressTarget import square_error_target_stresses_deriv_phase
-#import muTopOpt.sensitivity_analysis as sa
 
 
 ### ----- For rectangle grid ----- ###
@@ -48,6 +47,10 @@ def aim_function(phase, strains, stresses, cell, args):
                  Strain with which the stresses are nondimensionalized
         Young: float
                Youngs modulus with wich the stresses are nondimensionalized
+        case_stress_entry: int
+                           Wich entry of the stresses are compared?
+                           1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                           Else (Default): All entries
     Returns
     -------
     aim: float
@@ -58,7 +61,12 @@ def aim_function(phase, strains, stresses, cell, args):
     eta = args[2]
     loading = args[3]
     Young = args[4]
-    aim = square_error_target_stresses(cell, strains, stresses, target_stresses, loading, Young)
+    if len(args) > 5:
+        case_stress_entry = args[5]
+    else:
+        case_stress_entry = 0
+    aim = square_error_target_stresses(cell, strains, stresses, target_stresses,
+                                       loading, Young, case_stress_entry)
     aim += weight * phase_field_rectangular_grid(phase, eta, cell)
     return aim
 
@@ -86,6 +94,11 @@ def aim_function_deriv_strains(phase, strains, stresses, cell, args):
         loading: float
                  Strain with which the stresses are nondimensionalized
         Young: float
+               Youngs modulus with wich the stresses are nondimensionalized
+        case_stress_entry: int
+                           Wich entry of the stresses are compared?
+                           1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                           Else (Default): All entries
 
     Returns
     -------
@@ -95,8 +108,13 @@ def aim_function_deriv_strains(phase, strains, stresses, cell, args):
     target_stresses = args[0]
     loading = args[3]
     Young = args[4]
+    if len(args) > 5:
+        case_stress_entry = args[5]
+    else:
+        case_stress_entry = 0
     derivatives = square_error_target_stresses_deriv_strains(cell, strains, stresses,
-                                                             target_stresses, loading, Young)
+                                                             target_stresses, loading, Young,
+                                                             case_stress_entry)
     return derivatives
 
 def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young, Poisson,
@@ -134,6 +152,11 @@ def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young,
         loading: float
                  Strain with which the stresses are nondimensionalized
         Young: float
+               Youngs modulus with wich the stresses are nondimensionalized
+        case_stress_entry: int
+                           Wich entry of the stresses are compared?
+                           1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                           Else (Default): All entries
 
     Returns
     -------
@@ -145,8 +168,13 @@ def aim_function_deriv_phase(phase, strains, stresses, cell, Young, delta_Young,
     eta = args[2]
     loading = args[3]
     Young = args[4]
+    if len(args) > 5:
+        case_stress_entry = args[5]
+    else:
+        case_stress_entry = 0
     derivatives = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
-                                                           dstress_dphase_list, loading, Young)
+                                                           dstress_dphase_list, loading, Young,
+                                                           case_stress_entry)
     derivatives *= map_to_unit_range_derivative(phase)
     derivatives += weight * phase_field_rectangular_grid_deriv_phase(phase, eta, cell)
     return derivatives
@@ -262,7 +290,12 @@ def call_function(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, DelFs,
         with open(file_evo, 'a') as f:
             print(aim, file=f)
     if file_evo_details is not None:
-        sq_err = square_error_target_stresses(cell, strains, stresses, args[0], args[3], args[4])
+        if len(args) > 5:
+            case_stress_entry = args[5]
+        else:
+            case_stress_entry = 0
+        sq_err = square_error_target_stresses(cell, strains, stresses, args[0], args[3],
+                                              args[4], case_stress_entry)
         ph_field = args[1] * phase_field_rectangular_grid(phase, args[2], cell)
         norm_S = np.linalg.norm(S)**2
         norm_S = np.sqrt(Reduction(MPI.COMM_WORLD).sum(norm_S))
@@ -300,6 +333,11 @@ def aim_function_parall(phase, strains, stresses, cell, args):
         loading: float
                  Strain with which the stresses are nondimensionalized
         Young: float
+               Youngs modulus with wich the stresses are nondimensionalized
+        case_stress_entry: int
+                           Wich entry of the stresses are compared?
+                           1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                           Else (Default): All entries
 
     Returns
     -------
@@ -311,8 +349,12 @@ def aim_function_parall(phase, strains, stresses, cell, args):
     eta = args[2]
     loading = args[3]
     Young = args[4]
+    if len(args) > 5:
+        case_stress_entry = args[5]
+    else:
+        case_stress_entry = 0
     aim = square_error_target_stresses(cell, strains, stresses, target_stresses,
-                                       loading, Young)
+                                       loading, Young, case_stress_entry)
     aim += weight * phase_field_parallelogram_grid(phase, eta, cell)
     return aim
 
@@ -340,6 +382,11 @@ def aim_function_parall_deriv_strains(phase, strains, stresses, cell, args):
         loading: float
                  Strain with which the stresses are nondimensionalized
         Young: float
+               Youngs modulus with wich the stresses are nondimensionalized
+        case_stress_entry: int
+                           Wich entry of the stresses are compared?
+                           1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                           Else (Default): All entries
 
     Returns
     -------
@@ -349,8 +396,13 @@ def aim_function_parall_deriv_strains(phase, strains, stresses, cell, args):
     target_stresses = args[0]
     loading = args[3]
     Young = args[4]
+    if len(args) > 5:
+        case_stress_entry = args[5]
+    else:
+        case_stress_entry = 0
     derivatives = square_error_target_stresses_deriv_strains(cell, strains, stresses,
-                                                             target_stresses, loading, Young)
+                                                             target_stresses, loading, Young,
+                                                             case_stress_entry)
     return derivatives
 
 def aim_function_parall_deriv_phase(phase, strains, stresses, cell, Young, delta_Young, Poisson,
@@ -388,6 +440,11 @@ def aim_function_parall_deriv_phase(phase, strains, stresses, cell, Young, delta
         loading: float
                  Strain with which the stresses are nondimensionalized
         Young: float
+               Youngs modulus with wich the stresses are nondimensionalized
+        case_stress_entry: int
+                           Wich entry of the stresses are compared?
+                           1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                           Else (Default): All entries
 
     Returns
     -------
@@ -399,8 +456,13 @@ def aim_function_parall_deriv_phase(phase, strains, stresses, cell, Young, delta
     eta = args[2]
     loading = args[3]
     Young = args[4]
+    if len(args) > 5:
+        case_stress_entry = args[5]
+    else:
+        case_stress_entry = 0
     derivatives = square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
-                                                           dstress_dphase_list, loading, Young)
+                                                           dstress_dphase_list, loading, Young,
+                                                           case_stress_entry)
     derivatives *= map_to_unit_range_derivative(phase)
     derivatives += weight * phase_field_parallelogram_grid_deriv_phase(phase, eta, cell)
     return derivatives
@@ -516,7 +578,12 @@ def call_function_parall(phase, cell, mat, Young1, Poisson1, Young2, Poisson2, D
         with open(file_evo, 'a') as f:
             print(aim, file=f)
     if file_evo_details is not None:
-        sq_err = square_error_target_stresses(cell, strains, stresses, args[0], args[3], args[4])
+        if len(args) > 5:
+            case_stress_entry = args[5]
+        else:
+            case_stress_entry = 0
+        sq_err = square_error_target_stresses(cell, strains, stresses, args[0], args[3],
+                                              args[4], case_stress_entry)
         ph_field = args[1] * phase_field_parallelogram_grid(phase, args[2], cell)
         norm_S = np.linalg.norm(S)**2
         norm_S = np.sqrt(Reduction(MPI.COMM_WORLD).sum(norm_S))

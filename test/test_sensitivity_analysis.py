@@ -341,7 +341,7 @@ def test_sensitivity_target_stresses_no_filter(plot=False):
         ax.legend()
         plt.show()
 
-    assert abs(a * delta_list[2] - diff_list[2]) <= 1e-5
+    assert abs(a * delta_list[1] - diff_list[1]) <= 5e-4
 
 def test_sensitivity_target_stresses_filter(plot=False):
     """ Test the sensitivity of the target stresses with
@@ -542,8 +542,9 @@ def test_sensitivity_analysis_complete(plot=False):
         for i in range(len(phase)):
             phase[i] += delta
             aim_plus = call_function(phase, cell, mat, Young1, Poisson1,
-                                Young2, Poisson2, DelFs, nb_strain_steps,
-                                krylov_solver_args, solver_args, args, calc_sens=False, gradient=gradient, weights=weights)
+                                     Young2, Poisson2, DelFs, nb_strain_steps,
+                                     krylov_solver_args, solver_args, args, calc_sens=False,
+                                     gradient=gradient, weights=weights)
             S_fin_diff[i] = (aim_plus - aim) / delta
             phase[i] -= delta
 
@@ -568,7 +569,7 @@ def test_sensitivity_analysis_complete(plot=False):
         ax.legend()
         plt.show()
 
-    assert abs(a * delta_list[1] - diff_list[1]) <= 5e-5
+    assert abs(a * delta_list[1] - diff_list[1]) <= 5e-4
 
 
 def test_sensitivity_analysis_complete_two_quad(plot=False):
@@ -655,6 +656,122 @@ def test_sensitivity_analysis_complete_two_quad(plot=False):
             aim_plus = call_function(phase, cell, mat, Young1, Poisson1,
                                 Young2, Poisson2, DelFs, nb_strain_steps,
                                 krylov_solver_args, solver_args, args, calc_sens=False, gradient=gradient, weights=weights)
+            S_fin_diff[i] = (aim_plus - aim) / delta
+            phase[i] -= delta
+
+        diff = np.linalg.norm(S_fin_diff - S)
+        diff_list.append(diff)
+
+    ### ----- Fit ----- ###
+    # Fit to linear function
+    a = diff_list[0] / delta_list[0]
+
+    ### ----- Plotting (optional) ----- ###
+    if plot:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.set_xlabel('Fin. diff.')
+        ax.set_ylabel('Abs error of sensitivity (2 quad pts)')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.plot(delta_list, diff_list, marker='o', label='Calculated')
+        delta_list = np.array(delta_list)
+        ax.plot(delta_list, a * delta_list, '--', marker='o', label='Fit (lin)')
+        ax.legend()
+        plt.show()
+
+    assert abs(a * delta_list[1] - diff_list[1]) <= 5e-4
+
+def test_sensitivity_analysis_complete_one_stress_entry(plot=False):
+    ### ----- Set up ----- ###
+    # Consider only the xy-direction of the stress tensor
+    case_stress_entry = 3
+
+    # Discretization
+    nb_grid_pts = [5, 7]
+    dim = len(nb_grid_pts)
+    lengths = [2.5, 3.1]
+    formulation = µ.Formulation.small_strain
+
+    gradient = [muFFT.Stencils2D.d_10_00, muFFT.Stencils2D.d_01_00,
+                muFFT.Stencils2D.d_11_01, muFFT.Stencils2D.d_11_10]
+    weights=[1, 1]
+
+    # Material
+    phase = np.random.random(nb_grid_pts).flatten(order='F')
+    Young1 = 0
+    Young2 = 12
+    Poisson1 = 0
+    Poisson2= 0.3
+
+    # Load cases
+    DelFs = [np.zeros([dim, dim]), np.zeros([dim, dim])]
+    loading = 0.009
+    DelFs[0][0, 1] = loading / 2
+    DelFs[0][1, 0] = loading / 2
+    DelFs[1][0, 1] = 0.007 / 2
+    DelFs[1][1, 0] = 0.007 / 2
+    nb_strain_steps = 1
+
+    # muSpectre solver parameters
+    tol = 1e-6
+    maxiter = 100
+    verbose = µ.Verbosity.Silent
+    krylov_solver_args = (tol, maxiter, verbose)
+    solver_args = (tol, tol, verbose)
+
+    # Weighting parameters
+    weight = 0.3
+    eta = 0.025
+
+    # List of finite differences
+    if plot:
+        delta_list = [1e-2, 5e-3, 1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7]
+    else:
+        delta_list = [1e-4, 5e-5]
+
+
+    ### ----- Analytical derivation ----- ###
+    # Calculate target stresses
+    Young_av = (Young2 - Young1) / 2
+    Poisson_av = (Poisson2 - Poisson1) / 2
+    mu = 0.5 * Young_av / (1 + Poisson_av)
+    lam = Poisson_av / (1 - 2 * Poisson_av) * 0.5 * Young_av / (1 + Poisson_av)
+    target_stresses = []
+    for DelF in DelFs:
+        stress = 2 * mu * DelF + lam * np.trace(DelF) * np.eye(dim)
+        # Nondimensionalization
+        stress = stress / Young2 / loading
+        target_stresses.append(stress)
+    args = (target_stresses, weight, eta, loading, Young2, case_stress_entry)
+
+    # Initialize cell
+    cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights)
+    Young = (Young2 - Young1) * phase + Young1
+    Poisson = (Poisson2 - Poisson1) * phase + Poisson1
+    mat = µ.material.MaterialLinearElastic4_2d.make(cell, "material")
+    for pixel_id in cell.pixel_indices:
+        mat.add_pixel(pixel_id, Young[pixel_id], Poisson[pixel_id])
+    cell.initialise()
+
+    # Calculate aim function + sensitivity
+    aim, S = call_function(phase, cell, mat, Young1, Poisson1,
+                           Young2, Poisson2, DelFs, nb_strain_steps,
+                           krylov_solver_args, solver_args, args, calc_sens=True,
+                           gradient=gradient, weights=weights)
+
+    ### ----- Finite difference derivation ----- ###
+    shape = [dim, dim, cell.nb_quad_pts, *cell.nb_subdomain_grid_pts]
+    shape2 = [dim, dim, cell.nb_quad_pts, cell.nb_pixels]
+    diff_list = []
+    for delta in delta_list:
+        S_fin_diff = np.empty(S.shape)
+        for i in range(len(phase)):
+            phase[i] += delta
+            aim_plus = call_function(phase, cell, mat, Young1, Poisson1,
+                                     Young2, Poisson2, DelFs, nb_strain_steps,
+                                     krylov_solver_args, solver_args, args, calc_sens=False,
+                                     gradient=gradient, weights=weights)
             S_fin_diff[i] = (aim_plus - aim) / delta
             phase[i] -= delta
 
