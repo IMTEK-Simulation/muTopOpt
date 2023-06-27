@@ -208,9 +208,9 @@ def main(folder, three_loadings=False, equilat_triangle_grid=False):
         ax.set_xlim(0, xmax)
 
     # Plot phase distribution
-    phase_plot = phase_ini
+    phase_plot = phase_ini.transpose()
     for i in range(1, nb_cells[0]):
-        phase_plot = np.concatenate((phase_plot, phase_ini), axis=0)
+        phase_plot = np.concatenate((phase_plot, phase_ini.transpose()), axis=0)
     helper = phase_plot
     for i in range(1, nb_cells[1]):
         phase_plot = np.concatenate((phase_plot, helper), axis=1)
@@ -258,9 +258,9 @@ def main(folder, three_loadings=False, equilat_triangle_grid=False):
         ax.set_xlim(0, xmax)
 
     # Plot phase distribution
-    phase_plot = phase
+    phase_plot = phase.transpose()
     for i in range(1, nb_cells[0]):
-        phase_plot = np.concatenate((phase_plot, phase), axis=0)
+        phase_plot = np.concatenate((phase_plot, phase.transpose()), axis=0)
     helper = phase_plot
     for i in range(1, nb_cells[1]):
         phase_plot = np.concatenate((phase_plot, helper), axis=1)
