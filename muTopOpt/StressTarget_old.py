@@ -1,21 +1,15 @@
 """
 This file contains the aim function and gradients for target stresses.
 """
-import sys
-import os
 
 import numpy as np
-
-# Default path of the library
-sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/python"))
-sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/libmufft/python"))
-sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/libmugrid/python"))
 import muSpectre as µ
 
 from NuMPI import MPI
 from NuMPI.Tools import Reduction
 
-def square_error_target_stresses(cell, strains, stresses, target_stresses):
+def square_error_target_stresses(cell, strains, stresses, target_stresses, loading, Young,
+                                 case_stress_entry=0):
     """ Function to calculate the square error between the average stresses and a list of target stresses.
 
     Parameters
@@ -28,6 +22,14 @@ def square_error_target_stresses(cell, strains, stresses, target_stresses):
               List of microscopic stresses. Must have the same length as target_stresses.
     target_stresses: list of np.ndarray(dim, dim) of floats
                      List of target stresses. Must have the same length as stresses.
+    loading: float
+             Strain with which the stresses are nondimensionalized
+    Young: float
+           Youngs modulus with wich the stresses are nondimensionalized
+    case_stress_entry: int
+                       Wich entry of the stresses are compared?
+                       1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                       Else (Default): All entries
 
     Returns:
     square_error: float
@@ -51,18 +53,25 @@ def square_error_target_stresses(cell, strains, stresses, target_stresses):
         for j in range(dim):
             for k in range(dim):
                 stress_average[j, k] = Reduction(MPI.COMM_WORLD).mean(stress[j, k])
+        stress_average = stress_average / loading / Young
         # Square error
-        normalization = np.linalg.norm(target_stress) ** 2
-        err = np.linalg.norm(stress_average - target_stress)**2
-        square_error +=  err / normalization
+        if case_stress_entry == 1:
+            square_error += (stress_average[0, 0] - target_stress[0, 0])**2
+        elif case_stress_entry == 2:
+            square_error += (stress_average[1, 1] - target_stress[1, 1])**2
+        elif case_stress_entry == 3:
+            square_error += (stress_average[0, 1] - target_stress[0, 1])**2
+            square_error += (stress_average[1, 0] - target_stress[1, 0])**2
+        else:
+            square_error += np.linalg.norm(stress_average - target_stress)**2
 
     return square_error
 
 
-def square_error_target_stresses_deriv_strains(cell, strains, stresses,
-                                               target_stresses):
-    """ Function to calculate the partial derivative of
-        square_error_target_stresses with respect to the strains.
+def square_error_target_stresses_deriv_strains(cell, strains, stresses, target_stresses,
+                                               loading, Young, case_stress_entry=0):
+    """ Function to calculate the partial derivative of square_error_target_stresses
+        with respect to the strains.
 
     Parameters
     ----------
@@ -74,6 +83,14 @@ def square_error_target_stresses_deriv_strains(cell, strains, stresses,
               List of microscopic stresses. Must have the same length as target_stresses.
     target_stresses: list of np.ndarray(dim, dim) of floats
                      List of target stresses. Must have the same length as strains.
+    loading: float
+             Strain with which the stresses are nondimensionalized
+    Young: float
+           Youngs modulus with wich the stresses are nondimensionalized
+    case_stress_entry: int
+                       Wich entry of the stresses are compared?
+                       1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                       Else (Default): All entries
 
     Returns:
     derivatives: list of np.ndarray(dim**2 * nb_quad_pts * nb_pixels) of floats
@@ -91,30 +108,38 @@ def square_error_target_stresses_deriv_strains(cell, strains, stresses,
     # Calculate derivatives
     derivatives = []
     for k in range(len(strains)):
-        # Target stress
         target_stress = target_stresses[k]
-
-        # Average stress
         stress, dstress_dstrain = cell.evaluate_stress_tangent(strains[k].reshape(shape, order='F'))
         stress_average = np.empty((dim, dim))
         for i in range(dim):
             for j in range(dim):
                 stress_average[i, j] = Reduction(MPI.COMM_WORLD).mean(stress[i, j])
-
-        # Derivative
+        stress_average = stress_average / loading / Young
         derivative = 0
-        normalization = np.linalg.norm(target_stress) ** 2
-        for i in range(dim):
-            for j in range(dim):
-                derivative += 2 * (stress_average[i, j] - target_stress[i, j]) *\
-                    dstress_dstrain[i, j] / nb_pixels / cell.nb_quad_pts  / normalization
+        if case_stress_entry == 1:
+            derivative += 2 * (stress_average[0, 0] - target_stress[0, 0]) *\
+                    dstress_dstrain[0, 0] / nb_pixels / cell.nb_quad_pts  / loading / Young
+        elif case_stress_entry == 2:
+            derivative += 2 * (stress_average[1, 1] - target_stress[1, 1]) *\
+                    dstress_dstrain[1, 1] / nb_pixels / cell.nb_quad_pts  / loading / Young
+        elif case_stress_entry == 3:
+            derivative += 2 * (stress_average[0, 1] - target_stress[0, 1]) *\
+                    dstress_dstrain[0, 1] / nb_pixels / cell.nb_quad_pts  / loading / Young
+            derivative += 2 * (stress_average[1, 0] - target_stress[1, 0]) *\
+                    dstress_dstrain[1, 0] / nb_pixels / cell.nb_quad_pts  / loading / Young
+        else:
+            for i in range(dim):
+                for j in range(dim):
+                    derivative += 2 * (stress_average[i, j] - target_stress[i, j]) *\
+                        dstress_dstrain[i, j] / nb_pixels / cell.nb_quad_pts  / loading / Young
         derivative = derivative.flatten(order='F')
         derivatives.append(derivative)
 
     return derivatives
 
 def square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
-                                             dstress_dmat_list):
+                                             dstress_dphase_list, loading, Young,
+                                             case_stress_entry=0):
     """ Function to calculate the partial derivative of square_error_target_stresses
         with respect to the phase.
 
@@ -126,12 +151,19 @@ def square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
         List of microscopic stresses. Must have the same length as target_stresses.
     target_stresses: list of np.ndarray(dim, dim) of floats
         List of target stresses. Must have the same length as stresses.
-    dstress_dmat: List of np.ndarray(dim**2 * nb_quad_pts * nb_pixels) of floats
-        List of the partial derivatives of the stress with respect to the
-        material density.
+    dstress_dphase: List of np.ndarray(dim**2 * nb_quad_pts * nb_pixels) of floats
+        List of the partial derivatives of the stress with respect to the strains.
+    loading: float
+             Strain with which the stresses are nondimensionalized
+    Young: float
+           Youngs modulus with wich the stresses are nondimensionalized
+    case_stress_entry: int
+                       Wich entry of the stresses are compared?
+                       1: Only xx-entry 2: Only yy-entry 3: Only xy- and yx-entry
+                       Else (Default): All entries
 
     Returns:
-    derivative: np.ndarray(nb_quad_pts, *nb_grid_pts) of floats
+    derivative: np.ndarray(nb_pixels) of floats
                 Partial derivative with respect to the phase.
     """
     dim = cell.nb_domain_grid_pts.dim
@@ -147,18 +179,30 @@ def square_error_target_stresses_deriv_phase(cell, stresses, target_stresses,
     # Calculate derivatives
     derivative = 0
     for i in range(len(stresses)):
-        # Target stress
         target_stress = target_stresses[i]
-        # Average stress
         stress = stresses[i].reshape(shape, order='F')
         stress_average = np.empty((dim, dim))
         for j in range(dim):
             for k in range(dim):
                 stress_average[j, k] = Reduction(MPI.COMM_WORLD).mean(stress[j, k])
-        dstress_dmat = dstress_dmat_list[i]
-        normalization = np.linalg.norm(target_stress) ** 2
-        for j in range(dim):
-            for k in range(dim):
-                derivative += 2 * (stress_average[j, k] - target_stress[j, k]) *\
-                    dstress_dmat[j, k] / nb_pixels / cell.nb_quad_pts / normalization
+        stress_average = stress_average / loading / Young
+        dstress_dphase = np.average(dstress_dphase_list[i], axis=2) / loading / Young
+        if case_stress_entry == 1:
+            derivative += 2 * (stress_average[0, 0] - target_stress[0, 0]) *\
+                        dstress_dphase[0, 0] / nb_pixels
+        elif case_stress_entry == 2:
+            derivative += 2 * (stress_average[1, 1] - target_stress[1, 1]) *\
+                        dstress_dphase[1, 1] / nb_pixels
+        elif case_stress_entry == 3:
+            derivative += 2 * (stress_average[0, 1] - target_stress[0, 1]) *\
+                        dstress_dphase[0, 1] / nb_pixels
+            derivative += 2 * (stress_average[1, 0] - target_stress[1, 0]) *\
+                        dstress_dphase[1, 0] / nb_pixels
+        else:
+            for j in range(dim):
+                for k in range(dim):
+                    derivative += 2 * (stress_average[j, k] - target_stress[j, k]) *\
+                        dstress_dphase[j, k] / nb_pixels
+
+    derivative = derivative.flatten(order='F')
     return derivative
