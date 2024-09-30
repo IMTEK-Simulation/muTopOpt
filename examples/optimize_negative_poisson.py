@@ -34,7 +34,7 @@ if MPI.COMM_WORLD.rank == 0:
     print(f'MPI: Rank {MPI.COMM_WORLD.rank}, size {MPI.COMM_WORLD.size}')
 
 ### ----- Geometry ----- ###
-nb_grid_pts = [32, 32]
+nb_grid_pts = [8, 8]
 lengths = [1, 1]
 
 dim = len(nb_grid_pts)
