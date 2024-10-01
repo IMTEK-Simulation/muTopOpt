@@ -29,7 +29,7 @@ from NuMPI.IO import load_npy
 from NuMPI.Tools import Reduction
 
 from muTopOpt.Controller import wrapper
-from muTopOpt.MaterialDensity import node_to_quad_pt_2_quad_pts_sequential
+from muTopOpt.MaterialDensity import node_to_quad_pt_2_quad_pts
 
 
 ################################################################################
@@ -107,7 +107,7 @@ ftol = 1e-15
 maxcor = 10
 
 ### ----- Folder for saving data ----- ###
-folder = f'examples/results_sequential/'
+folder = f'examples/results_parallel/'
 
 ################################################################################
 ### ----------------------------- Target stress ---------------------------- ###
@@ -212,7 +212,7 @@ if MPI.COMM_WORLD.rank == 0:
 ################################################################################
 ### ----- Initialisation ----- ###
 # Calculate material density
-density = node_to_quad_pt_2_quad_pts_sequential(phase)
+density = node_to_quad_pt_2_quad_pts(phase, cell)
 
 # Material
 density = density.reshape([cell.nb_quad_pts, -1], order='F')

@@ -4,7 +4,15 @@ an optimization problem and the derivation of the phase-field
 function with respect to the phase-field.
 """
 
+import sys
+import os
+
 import numpy as np
+
+# Default path of the library
+sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/python"))
+sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/libmufft/python"))
+sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/libmugrid/python"))
 import muSpectre as µ
 
 from NuMPI import MPI
@@ -50,6 +58,64 @@ def phase_field_gradient_sequential(phase, cell):
 
     return gradient_term
 
+def phase_field_gradient(phase, cell):
+    """ Function to calculate the gradient part of the
+        phase-field function on a regular 2D grid.
+        As discretization rectangular triangles are used. The
+        phase field is defined on the nodes.
+
+    Parameters
+    ----------
+    phase: np.ndarray(nb_grid_pts) of floats
+           Phase field function.
+    cell: object
+          muSpectre cell object
+
+    Returns
+    -------
+    gradient_term: float
+                   Gradient term of the phase-field energy
+    """
+    # Lengths of subdomain
+    hx = cell.domain_lengths[0] / cell.nb_domain_grid_pts[0]
+    hy = cell.domain_lengths[1] / cell.nb_domain_grid_pts[1]
+    Lx = hx * cell.nb_subdomain_grid_pts[0]
+    Ly = hy * cell.nb_subdomain_grid_pts[1]
+
+    # Phase in Fourier space
+    fft = cell.fft_engine
+    q = fft.fftfreq
+    fourier_phase = fft.fetch_or_register_fourier_space_field(
+        "fft_workspace", 1)
+    fft.fft(phase, fourier_phase)
+    phase_dx = np.zeros_like(phase, order='F')
+    phase_dy = np.zeros_like(phase, order='F')
+
+    gradient_norm = np.empty([cell.nb_quad_pts, *phase.shape])
+    # Lower left triangle
+    dx = µ.DiscreteDerivative([0, 0], [[-1], [1]]).fourier(q)
+    dy = µ.DiscreteDerivative([0, 0], [[-1, 1]]).fourier(q)
+    fft.ifft(dx * fourier_phase, phase_dx)
+    phase_dx *= fft.normalisation / hx
+    fft.ifft(dy * fourier_phase, phase_dy)
+    phase_dy *= fft.normalisation / hy
+    gradient_norm[0] = phase_dx ** 2 + phase_dy ** 2
+
+    # Upper right triangle
+    dx = µ.DiscreteDerivative([0, 1], [[-1], [1]]).fourier(q)
+    dy = µ.DiscreteDerivative([1, 0], [[-1, 1]]).fourier(q)
+    fft.ifft(dx * fourier_phase, phase_dx)
+    phase_dx *= fft.normalisation / hx
+    fft.ifft(dy * fourier_phase, phase_dy)
+    phase_dy *= fft.normalisation / hy
+    gradient_norm[1] = phase_dx ** 2 + phase_dy ** 2
+
+    # Integral
+    int_gradient = np.average(gradient_norm) * Lx * Ly
+    int_gradient = Reduction(MPI.COMM_WORLD).sum(int_gradient)
+
+    return int_gradient
+
 def phase_field_double_well_potential_sequential(phase, cell):
     """ Function to calculate the double-well potential part of the
         phase-field energy, e.g. int(rho² - 2rho³ + rho⁴)dx on a regular 2D grid.
@@ -70,6 +136,7 @@ def phase_field_double_well_potential_sequential(phase, cell):
     """
     # Determinante of Jacobian matrix
     det = np.prod(cell.domain_lengths) / cell.nb_pixels
+
     # Phase at the corners of each element
     phase_0 = phase.copy() # Bottom left corner
     phase_1 = np.roll(phase, -1, axis=0) # Bottom right corner
@@ -107,6 +174,90 @@ def phase_field_double_well_potential_sequential(phase, cell):
 
     return rho_square - 2 * rho_qube + rho_quartic
 
+def phase_field_double_well_potential(phase, cell):
+    """ Function to calculate the double-well potential part of the
+        phase-field energy, e.g. int(rho² - 2rho³ + rho⁴)dx on a regular 2D grid.
+        The phase field is defined on the nodes with linear finite elements
+        (rectangular triangles).
+
+    Parameters
+    ----------
+    phase: np.ndarray(nb_grid_pts) of floats
+           Phase field function.
+    cell: object
+          muSpectre cell object
+
+    Returns
+    -------
+    gradient_term: float
+                   Gradient term of the phase-field energy
+    """
+    ### ----- Phase at the corners of the pixel ----- ###
+    # Phase in Fourier-space
+    fft = cell.fft_engine
+    q = fft.fftfreq
+    fourier_phase = fft.fetch_or_register_fourier_space_field(
+        "fft_workspace", 1)
+    fft.fft(phase, fourier_phase)
+
+    # Phase at bottom left corner of pixel
+    phase_0 = phase
+    # Phase at bottom right corner of pixel
+    phase_1 = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([1, 0], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_1)
+    phase_1 *= fft.normalisation
+    # Phase at upper left corner of pixel
+    phase_2 = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([0, 1], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_2)
+    phase_2 *= fft.normalisation
+    # Phase at upper right corner of pixel
+    phase_3 = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([1, 1], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_3)
+    phase_3 *= fft.normalisation
+
+    ### ----- Calculate double-well potential ----- ###
+    # Determinante of Jacobian matrix
+    hx = cell.domain_lengths[0] / cell.nb_domain_grid_pts[0]
+    hy = cell.domain_lengths[1] / cell.nb_domain_grid_pts[1]
+    det = hx * hy
+
+    # Calculate int(rho²)
+    rho_square = phase_0 ** 2 + 2 * phase_1 ** 2 + 2 * phase_2 ** 2 + phase_3 ** 2
+    rho_square += phase_0 * phase_1 + phase_0 * phase_2 + 2 * phase_1 * phase_2 +\
+                           phase_3 * phase_1 + phase_3 * phase_2
+    rho_square = 1/12 * np.sum(rho_square) * det
+
+    # Calculate int(rho³)
+    rho_qube = phase_0 ** 3 + 2 * phase_1 ** 3 + 2 * phase_2 ** 3 + phase_3 ** 3
+    rho_qube += phase_0 ** 2 * phase_1 + phase_0 ** 2 * phase_2 + phase_1 ** 2 * phase_0
+    rho_qube += 2 * phase_1 ** 2 * phase_2 + phase_2 ** 2 * phase_0 + 2 * phase_2 ** 2 * phase_1
+    rho_qube += phase_3 ** 2 * phase_1 + phase_3 ** 2 * phase_2 + phase_1 ** 2 * phase_3
+    rho_qube += phase_2 ** 2 * phase_3
+    rho_qube += phase_0 * phase_1 * phase_2 + phase_3 * phase_1 * phase_2
+    rho_qube = 1/20 * np.sum(rho_qube) * det
+
+    # Calculate int(rho⁴)
+    rho_quartic = phase_0 ** 4 + 2 * phase_1 ** 4 + 2 * phase_2 ** 4 + phase_3 ** 4
+    rho_quartic += phase_0 ** 3 * phase_1 + phase_0 ** 3 * phase_2 + phase_1 ** 3 * phase_0
+    rho_quartic += 2 * phase_1 ** 3 * phase_2 + phase_2 ** 3 * phase_0 + 2 * phase_2 ** 3 * phase_1
+    rho_quartic += phase_3 ** 3 * phase_1 + phase_3 **3 * phase_2 + phase_1 ** 3 * phase_3
+    rho_quartic += phase_2 ** 3 * phase_3
+    rho_quartic += phase_0 ** 2 * phase_1 ** 2 + phase_0 ** 2 * phase_2 ** 2
+    rho_quartic += 2 * phase_1 ** 2 * phase_2 ** 2 + phase_3 ** 2 * phase_1 ** 2
+    rho_quartic += phase_3 ** 2 * phase_2 ** 2
+    rho_quartic += phase_0 ** 2 * phase_1 * phase_2 + phase_1 ** 2 * phase_0 * phase_2
+    rho_quartic += phase_2 ** 2 * phase_0 * phase_1 + phase_3 ** 2 * phase_1 * phase_2
+    rho_quartic += phase_1 ** 2 * phase_3 * phase_2 + phase_2 ** 2 * phase_3 * phase_1
+    rho_quartic = 1/30 * np.sum(rho_quartic) * det
+
+    # Complete
+    int_potential = rho_square - 2 * rho_qube + rho_quartic
+    int_potential = Reduction(MPI.COMM_WORLD).sum(int_potential)
+    return int_potential
+
 def phase_field_energy_sequential(phase, cell, eta):
     """ Function to calculate the phase-field energy
         on a regular 2D grid. As discretization rectangular
@@ -130,6 +281,31 @@ def phase_field_energy_sequential(phase, cell, eta):
     """
     energy = eta * phase_field_gradient_sequential(phase, cell)
     energy += 1 / eta * phase_field_double_well_potential_sequential(phase, cell)
+    return energy
+
+def phase_field_energy(phase, cell, eta):
+    """ Function to calculate the phase-field energy
+        on a regular 2D grid. As discretization rectangular
+        triangles are used. The phase field is defined
+        on the nodes.
+
+    Parameters
+    ----------
+    phase: np.ndarray(nb_grid_pts) of floats
+           Phase field function.
+    cell: object
+          muSpectre cell object
+    eta: float
+         Weighting parameter of the phase field energy. A larger
+         eta means a broader interface.
+
+    Returns
+    -------
+    energy: float
+            Energy of the phase-field function
+    """
+    energy = eta * phase_field_gradient(phase, cell)
+    energy += 1 / eta * phase_field_double_well_potential(phase, cell)
     return energy
 
 def phase_field_energy_deriv_sequential(phase, cell, eta):
@@ -209,6 +385,130 @@ def phase_field_energy_deriv_sequential(phase, cell, eta):
     deriv_pot *= det
 
     # Complete derivative
+    deriv = eta * deriv_grad + 1 / eta * deriv_pot
+    return deriv
+
+def phase_field_energy_deriv(phase, cell, eta):
+    """ Function to calculate the derivative of the
+        phase-field energy on a regular 2D grid. As discretization
+        rectangular triangles are used. The phase field is defined
+        on the nodes.
+
+    Parameters
+    ----------
+    phase: np.ndarray(nb_grid_pts) of floats
+           Phase field function.
+    cell: object
+          muSpectre cell object
+    eta: float
+         Weighting parameter of the phase field energy. A larger
+         eta means a broader interface.
+
+    Returns
+    -------
+    derivative: np.ndarray(nb_grid_pts) of floats
+                Derivative of phase_field_energy with respect to the
+                phase field function at each grid point.
+    """
+    ### ----- Phase at relevant neighbors for each pixel ----- ###
+    # Phase in Fourier-space
+    fft = cell.fft_engine
+    q = fft.fftfreq
+    fourier_phase = fft.fetch_or_register_fourier_space_field(
+        "fft_workspace", 1)
+    fft.fft(phase, fourier_phase)
+
+    # Upper neighbor
+    phase_up = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([0, 1], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_up)
+    phase_up *= fft.normalisation
+    # Lower neighbor
+    phase_down = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([0, -1], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_down)
+    phase_down *= fft.normalisation
+    # Left neighbor
+    phase_left = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([-1, 0], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_left)
+    phase_left *= fft.normalisation
+    # Right neighbor
+    phase_right = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([1, 0], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_right)
+    phase_right *= fft.normalisation
+
+    # Upper left neighbor
+    phase_up_left = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([-1, 1], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_up_left)
+    phase_up_left *= fft.normalisation
+    # Lower right neighbor
+    phase_down_right = np.zeros_like(phase, order='F')
+    d = µ.DiscreteDerivative([1, -1], [[1]]).fourier(q)
+    fft.ifft(d * fourier_phase, phase_down_right)
+    phase_down_right *= fft.normalisation
+
+    ### ----- Derivative of gradient-term ----- ###
+    # Lengths of subdomain
+    hx = cell.domain_lengths[0] / cell.nb_domain_grid_pts[0]
+    hy = cell.domain_lengths[1] / cell.nb_domain_grid_pts[1]
+    Lx = hx * cell.nb_subdomain_grid_pts[0]
+    Ly = hy * cell.nb_subdomain_grid_pts[1]
+
+    # Derivative of the gradient term
+    deriv_grad = (-np.roll(phase, -1, axis=0) + 2 * phase -\
+                  np.roll(phase, 1, axis=0)) / hx ** 2
+    deriv_grad += (-np.roll(phase, -1, axis=1) + 2 * phase -\
+                   np.roll(phase, 1, axis=1)) / hy ** 2
+    deriv_grad = 4 * deriv_grad * Lx * Ly / cell.nb_quad_pts / cell.nb_pixels
+
+    # Calculate derivative
+    deriv_grad = (-phase_right + 2 * phase - phase_left) / hx ** 2
+    deriv_grad += (-phase_up + 2 * phase - phase_down) / hy ** 2
+    deriv_grad *= 4 * Lx * Ly / cell.nb_quad_pts / cell.nb_pixels
+
+    ### ----- Derivative of the double-well potential ----- ###
+    # Determinante of Jacobian matrix
+    det = hx * hy
+
+    # Calculate derivative
+    deriv_pot = 6 * phase + phase_up + phase_down + phase_left +\
+        phase_right + phase_up_left + phase_down_right
+    deriv_pot = 1/6 * deriv_pot
+
+    helper = 18 * phase ** 2 + 2 * phase_right ** 2 + 2 * phase_left ** 2
+    helper += 2 * phase_up ** 2 + 2 * phase_down ** 2 + 2 * phase_up_left ** 2
+    helper += 2 * phase_down_right ** 2
+    helper += 4 * phase * (phase_up + phase_down + phase_right + phase_left +\
+                           phase_up_left + phase_down_right)
+    helper += phase_up * phase_right + phase_up * phase_up_left
+    helper += phase_left * phase_up_left + phase_left * phase_down
+    helper += phase_down * phase_down_right + phase_right * phase_down_right
+    deriv_pot += -1/10 * helper
+
+    helper = 24 * phase ** 3 + 2 * (phase_right ** 3 + phase_left ** 3 +\
+                                    phase_up ** 3 + phase_down ** 3 +\
+                                    phase_up_left ** 3 + phase_down_right ** 3)
+    helper += 6 * phase ** 2 * (phase_right + phase_left + phase_up +\
+                                phase_down + phase_up_left + phase_down_right)
+    helper += 4 * phase * (phase_right ** 2 + phase_left ** 2 + phase_down ** 2 +\
+                           phase_up ** 2 + phase_up_left ** 2 + phase_down_right ** 2)
+    helper += 2 * phase * (phase_right * phase_up + phase_left * phase_up_left +\
+                           phase_down * phase_down_right + phase_up * phase_up_left +\
+                           phase_down * phase_left + phase_right * phase_down_right)
+    helper += phase_right ** 2 * (phase_up + phase_down_right)
+    helper += phase_left ** 2 * (phase_up_left + phase_down)
+    helper += phase_down ** 2 * (phase_left + phase_down_right)
+    helper += phase_down_right ** 2 * (phase_down + phase_right)
+    helper += phase_up ** 2 * (phase_right + phase_up_left)
+    helper += phase_up_left ** 2 * (phase_up + phase_left)
+    deriv_pot += 1/30 * helper
+
+    deriv_pot *= det
+
+    ### ----- Complete derivative ----- ###
     deriv = eta * deriv_grad + 1 / eta * deriv_pot
     return deriv
 

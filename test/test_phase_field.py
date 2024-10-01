@@ -25,7 +25,15 @@
 """
 Tests the phase field functions
 """
+import sys
+import os
+
 import numpy as np
+
+# Default path of the library
+sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/python"))
+sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/libmufft/python"))
+sys.path.insert(0, os.path.join(os.getcwd(), "../muspectre/builddir/language_bindings/libmugrid/python"))
 import muSpectre as µ
 
 from muTopOpt.PhaseField import phase_field_rectangular_grid_deriv_phase
@@ -35,6 +43,8 @@ from muTopOpt.PhaseField import phase_field_equilat_tri_grid
 from muTopOpt.PhaseField import phase_field_energy_sequential
 from muTopOpt.PhaseField import phase_field_double_well_potential_sequential
 from muTopOpt.PhaseField import phase_field_energy_deriv_sequential
+from muTopOpt.PhaseField import phase_field_energy
+from muTopOpt.PhaseField import phase_field_energy_deriv
 
 ################################################################################
 ### ---------------------------- Phase on nodes ---------------------------- ###
@@ -139,6 +149,12 @@ def test_phase_field_energy_deriv(plot=False):
     # Analytical calculation of the derivative
     func = phase_field_energy_sequential(phase, cell, eta)
     deriv = phase_field_energy_deriv_sequential(phase, cell, eta)
+
+    # Test parallel implementation
+    func_paral = phase_field_energy(phase, cell, eta)
+    deriv_paral = phase_field_energy_deriv(phase, cell, eta)
+    assert abs(func - func_paral) < 1e-7
+    assert np.linalg.norm(deriv - deriv_paral) < 1e-7
 
     # Finite difference calculation of the derivative
     diff_list = []
@@ -299,8 +315,8 @@ def test_phase_field_equilat_tri_grid_deriv_phase(plot=False):
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
 
 if __name__ == "__main__":
-    test_double_well_potential()
+    #test_double_well_potential()
     test_phase_field_energy_deriv(plot=True)
-    test_phase_field_rectangular_grid_deriv_phase(plot=True)
-    test_phase_field_equilat_tri_grid_deriv_phase(plot=True)
+    #test_phase_field_rectangular_grid_deriv_phase(plot=True)
+    #test_phase_field_equilat_tri_grid_deriv_phase(plot=True)
 

@@ -16,7 +16,7 @@ from muTopOpt.MaterialDensity import map_to_unit_range_derivative
 from muTopOpt.MaterialDensity import node_to_quad_pt_2_quad_pts_sequential
 from muTopOpt.MaterialDensity import df_dphase_2_quad_pts_derivative_sequential
 from muTopOpt.MaterialDensity import node_to_quad_pt_2_quad_pts
-# from muTopOpt.MaterialDensity import df_dphase_2_quad_pts_derivative
+from muTopOpt.MaterialDensity import df_dphase_2_quad_pts_derivative
 
 from muTopOpt.Controller import calculate_dstress_dmat
 from muTopOpt.StressTarget import square_error_target_stresses
@@ -105,24 +105,31 @@ def test_node_to_quad_pt_2_quad_pts():
     assert abs(a - b) < 1e-7
 
     # Test parallel implementation
-    material2 = node_to_quad_pt_2_quad_pts(phase, cell)
+    material_paral = node_to_quad_pt_2_quad_pts(phase, cell)
 
-    assert np.linalg.norm(material - material2) < 1e-7
+    assert np.linalg.norm(material - material_paral) < 1e-7
 
 def test_df_dphase_2_quad_pts_derivative(plot=False):
     """ Test the derivative of df_dphase_2_quad_pts_derivative.
     """
+    # Function derivatives
     def func(material):
         return np.sum(material**2)
     def func_deriv_mat(material):
         return 2 * material.copy()
 
+    # Parameters
     nb_grid_pts = [3, 3]
     phase = np.random.random(nb_grid_pts)
     if plot:
         delta_list = [1e-2, 5e-3, 1e-3, 5e-4, 1e-4, 5e-5, 1e-5]
     else:
         delta_list = [1e-4, 5e-5]
+    lengths = [2.5, 3.1]
+    formulation = µ.Formulation.small_strain
+    gradient, weights = µ.linear_finite_elements.gradient_2d
+    phase = np.random.random(nb_grid_pts)
+    cell = µ.Cell(nb_grid_pts, lengths, formulation, gradient, weights)
 
     # Analytical calculation of derivative
     material = node_to_quad_pt_2_quad_pts_sequential(phase)
@@ -166,6 +173,10 @@ def test_df_dphase_2_quad_pts_derivative(plot=False):
         plt.show()
 
     assert abs(a * delta_list[1] - diff_list[1]) <= 1e-6
+
+    # Test parallel implementation
+    deriv_paral = df_dphase_2_quad_pts_derivative(deriv_mat, cell)
+    assert np.linalg.norm(deriv_ana - deriv_paral) < 1e-7
 
 def test_df_dphase_2_quad_pts_derivative_2(plot=False):
     """ Test the derivative of df_dphase_2_quad_pts_derivative

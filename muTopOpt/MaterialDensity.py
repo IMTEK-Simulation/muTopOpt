@@ -87,6 +87,8 @@ def node_to_quad_pt_2_quad_pts(phase, cell):
     ---------
     phase: np.ndarray (nb_grid_pts) of floats
            Values of the field to interpolate
+    cell: object
+          muSpectre cell object
 
     Returns
     -------
@@ -104,18 +106,18 @@ def node_to_quad_pt_2_quad_pts(phase, cell):
     fft.fft(phase, fourier_phase)
 
     # Lower left triangle
-    #d = µ.DiscreteDerivative([0, 0], [[[1], [1]], [[1], [0]]])
-    d = µ.DiscreteDerivative([0, 0], [[1, 0], [1, 1]])
+    d = µ.DiscreteDerivative([0, 0], [[1/3, 1/3], [1/3, 0]])
     material0 = np.zeros_like(phase)
     d = d.fourier(q)
     fft.ifft(d * fourier_phase, material0)
     material0 *= fft.normalisation
 
-    #material0 = np.roll(phase, -1, axis=0) + np.roll(phase, -1, axis=1)
-    #material0 = (material0 + phase) / 3
     # Upper right triangle
-    material1 = np.roll(phase, -1, axis=0) + np.roll(phase, -1, axis=1)
-    material1 = (material1 + np.roll(phase, [-1, -1], axis=(0, 1))) / 3
+    d = µ.DiscreteDerivative([0, 0], [[0, 1/3], [1/3, 1/3]])
+    material1 = np.zeros_like(phase)
+    d = d.fourier(q)
+    fft.ifft(d * fourier_phase, material1)
+    material1 *= fft.normalisation
 
     return np.stack((material0, material1), axis=0)
 
@@ -127,8 +129,6 @@ def df_dphase_2_quad_pts_derivative_sequential(df_dmat):
         This implementation works only sequentially.
     Parameter
     ---------
-    phase: np.ndarray (nb_grid_pts) of floats
-           Values of the phase-field at the nodes
     df_dmat: np.ndarray([-1, nb_quad_pts, *nb_grid_pts]) of floats
              Derivative of the function with respect to the
              material density defined at the quadrature points.
@@ -155,5 +155,53 @@ def df_dphase_2_quad_pts_derivative_sequential(df_dmat):
         helper += np.roll(df_dmat[i, 1, :, :], 1, axis=0)
         helper += df_dmat[i, 0, :, :]
         df_dphase[i] = helper / 3
+
+    return df_dphase
+
+def df_dphase_2_quad_pts_derivative(df_dmat, cell):
+    """ Derivative of a function with respect to the phase
+        defined at the nodes. The interpolation from nodes to quadrature
+        points is done with linear finite elements using
+        rectangular triangles.
+        This implementation works only sequentially.
+    Parameter
+    ---------
+    df_dmat: np.ndarray([-1, nb_quad_pts, *nb_grid_pts]) of floats
+             Derivative of the function with respect to the
+             material density defined at the quadrature points.
+    cell: object
+          muSpectre cell object
+
+    Returns
+    -------
+    df_dphase: np.ndarray([-1, nb_grid_pts]) of floats
+               Derivative of the function with respect to the phase.
+    """
+    if (len(df_dmat.shape) != 4):
+        message = f'df_dmat has the shape {df_dmat.shape} '
+        message += f'but it must be of the shape of [-1, nb_quad_pts, *nb_grid_pts].'
+        raise ValueError(message)
+    if (df_dmat.shape[1] != 2):
+        message = f'The number of quadrature is {df_dmat.shape[1]}, but '
+        message += 'it must be 2.'
+        raise ValueError(message)
+
+    df_dphase = np.empty([df_dmat.shape[0], *df_dmat.shape[2:]])
+    fft = cell.fft_engine
+    fft.create_plan(1)
+    q = fft.fftfreq
+    d0 = µ.DiscreteDerivative([-1, -1], [[0, 1], [1, 1]])
+    d1 = µ.DiscreteDerivative([-1, -1], [[1, 1], [1, 0]])
+    d0 = d0.fourier(q)
+    d1 = d1.fourier(q)
+    helper = np.zeros_like(df_dphase[0])
+    fourier = fft.fetch_or_register_fourier_space_field(
+        "fft_workspace_quad", 2)
+
+    for i in range(df_dmat.shape[0]):
+        fft.fft(df_dmat[i], fourier)
+        fft.ifft(d0 * fourier.array()[0] + d1 * fourier.array()[1], helper)
+        helper *= fft.normalisation / 3
+        df_dphase[i] = helper
 
     return df_dphase
